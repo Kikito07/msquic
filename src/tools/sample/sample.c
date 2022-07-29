@@ -47,6 +47,7 @@ Abstract:
 #include "msquic.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 #ifndef UNREFERENCED_PARAMETER
 #define UNREFERENCED_PARAMETER(P) (void)(P)
@@ -77,10 +78,10 @@ const uint64_t IdleTimeoutMs = 1000;
 //
 // The length of buffer sent over the streams in the protocol.
 //
-const uint64_t SendBufferLength = 10240;
+const uint32_t SendBufferLength = 10240;
 
 //
-// The total transmission size;
+// The total transmission size
 //
 
 uint64_t transmission_size;
@@ -195,6 +196,12 @@ DecodeHexBuffer(
     return HexBufferLen;
 }
 
+struct server_context {
+   struct timeval start;
+   int initialized;
+   uint64_t bytes_received;
+};
+
 //
 // Allocates and sends some data over a QUIC stream.
 //
@@ -245,27 +252,42 @@ ServerStreamCallback(
     )
 {
     UNREFERENCED_PARAMETER(Context);
+    struct server_context *ctx = (struct server_context *) Context;
     switch (Event->Type) {
     case QUIC_STREAM_EVENT_SEND_COMPLETE:
         //
         // A previous StreamSend call has completed, and the context is being
         // returned back to the app.
         //
-        free(Event->SEND_COMPLETE.ClientContext);
+        //free(Event->SEND_COMPLETE.ClientContext);
         printf("[strm][%p] Data sent\n", Stream);
         break;
     case QUIC_STREAM_EVENT_RECEIVE:
+        ;
+        if(!ctx->initialized){
+            ctx->initialized = 1;
+            gettimeofday(&(ctx->start),NULL);
+        }
+        ctx->bytes_received += Event->RECEIVE.TotalBufferLength;
         //
         // Data was received from the peer on the stream.
         //
-        printf("[strm][%p] Data received\n", Stream);
+        //printf("[strm][%p] Data received\n", Stream);
+
         break;
     case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN:
         //
         // The peer gracefully shut down its send direction of the stream.
         //
         printf("[strm][%p] Peer shut down\n", Stream);
-        ServerSend(Stream);
+        struct timeval finish;
+        double elapsed = 0.0;
+        gettimeofday(&finish,NULL);
+        elapsed = (finish.tv_sec - (ctx->start).tv_sec) + (finish.tv_usec - (ctx->start).tv_usec) / 1000000.0;
+        printf("elapsed time : %lf\n",elapsed);
+        printf("bytes received : %ld\n",ctx->bytes_received);
+        printf("goodput : %lf Mbps\n", (ctx->bytes_received)*8/1000000/elapsed);
+        //ServerSend(Stream);
         break;
     case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
         //
@@ -342,7 +364,9 @@ ServerConnectionCallback(
         // callback handler before returning.
         //
         printf("[strm][%p] Peer started\n", Event->PEER_STREAM_STARTED.Stream);
-        MsQuic->SetCallbackHandler(Event->PEER_STREAM_STARTED.Stream, (void*)ServerStreamCallback, NULL);
+        struct server_context *ctx= malloc(sizeof(struct server_context));
+        memset(ctx,0,sizeof(struct server_context));
+        MsQuic->SetCallbackHandler(Event->PEER_STREAM_STARTED.Stream, (void*)ServerStreamCallback, ctx);
         break;
     case QUIC_CONNECTION_EVENT_RESUMED:
         //
@@ -380,6 +404,7 @@ ServerListenerCallback(
         // proceed, the server must provide a configuration for QUIC to use. The
         // app MUST set the callback handler before returning.
         //
+        
         MsQuic->SetCallbackHandler(Event->NEW_CONNECTION.Connection, (void*)ServerConnectionCallback, NULL);
         Status = MsQuic->ConnectionSetConfiguration(Event->NEW_CONNECTION.Connection, Configuration);
         break;
@@ -572,8 +597,9 @@ ClientStreamCallback(
         // A previous StreamSend call has completed, and the context is being
         // returned back to the app.
         //
-        free(Event->SEND_COMPLETE.ClientContext);
-        printf("[strm][%p] Data sent\n", Stream);
+        //free(Event->SEND_COMPLETE.ClientContext);
+        //printf("[strm][%p] Data sent\n", Stream);
+        
         break;
     case QUIC_STREAM_EVENT_RECEIVE:
         //
@@ -610,7 +636,7 @@ ClientStreamCallback(
 }
 
 void
-ClientSend(
+ClientSendFirst(
     _In_ HQUIC Connection
     )
 {
@@ -660,14 +686,21 @@ ClientSend(
     // the buffer. This indicates this is the last buffer on the stream and the
     // the stream is shut down (in the send direction) immediately after.
     //
+    
     uint64_t transmission_counter = 0;
     while(transmission_counter < transmission_size){
-        if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_FIN, SendBuffer))) {
+        if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_NONE, SendBuffer))) {
         printf("StreamSend failed, 0x%x!\n", Status);
         free(SendBufferRaw);
         goto Error;
         }
-        transmission_counter += SendBufferLength;
+        transmission_counter += (uint64_t)SendBufferLength;
+        printf("transmission_counter : %ld\n",transmission_counter);
+    }
+    if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_FIN, SendBuffer))) {
+        printf("StreamSend failed, 0x%x!\n", Status);
+        free(SendBufferRaw);
+        goto Error;
     }
     
 
@@ -733,11 +766,11 @@ ClientConnectionCallback(
         // A resumption ticket (also called New Session Ticket or NST) was
         // received from the server.
         //
-        printf("[conn][%p] Resumption ticket received (%u bytes):\n", Connection, Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength);
-        for (uint64_t i = 0; i < Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength; i++) {
-            printf("%.2X", (uint8_t)Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicket[i]);
-        }
-        printf("\n");
+        // printf("[conn][%p] Resumption ticket received (%u bytes):\n", Connection, Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength);
+        // for (uint64_t i = 0; i < Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength; i++) {
+        //     printf("%.2X", (uint8_t)Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicket[i]);
+        // }
+        // printf("\n");
         break;
     default:
         break;
@@ -835,9 +868,7 @@ RunClient(
         }
     }
 
-    //
-    // Get the target / server name or IP from the command line.
-    //
+    
     char* endptr;
     const char* transmission_size_str;;
     if((transmission_size_str = GetValue(argc,argv,"G")) == NULL){
@@ -847,7 +878,9 @@ RunClient(
     }
     transmission_size = (uint64_t) strtoimax(transmission_size_str,&endptr,10);
     
-    
+    //
+    // Get the target / server name or IP from the command line.
+    //
     const char* Target;
     if ((Target = GetValue(argc, argv, "target")) == NULL) {
         printf("Must specify '-target' argument!\n");
