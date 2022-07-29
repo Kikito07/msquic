@@ -77,7 +77,13 @@ const uint64_t IdleTimeoutMs = 1000;
 //
 // The length of buffer sent over the streams in the protocol.
 //
-const uint32_t SendBufferLength = 100;
+const uint64_t SendBufferLength = 10240;
+
+//
+// The total transmission size;
+//
+
+uint64_t transmission_size;
 
 //
 // The QUIC API/function table returned from MsQuicOpen2. It contains all the
@@ -167,20 +173,20 @@ DecodeHexChar(
 //
 // Helper function to convert a string of hex characters to a byte buffer.
 //
-uint32_t
+uint64_t
 DecodeHexBuffer(
     _In_z_ const char* HexBuffer,
-    _In_ uint32_t OutBufferLen,
+    _In_ uint64_t OutBufferLen,
     _Out_writes_to_(OutBufferLen, return)
         uint8_t* OutBuffer
     )
 {
-    uint32_t HexBufferLen = (uint32_t)strlen(HexBuffer) / 2;
+    uint64_t HexBufferLen = (uint64_t)strlen(HexBuffer) / 2;
     if (HexBufferLen > OutBufferLen) {
         return 0;
     }
 
-    for (uint32_t i = 0; i < HexBufferLen; i++) {
+    for (uint64_t i = 0; i < HexBufferLen; i++) {
         OutBuffer[i] =
             (DecodeHexChar(HexBuffer[i * 2]) << 4) |
             DecodeHexChar(HexBuffer[i * 2 + 1]);
@@ -434,7 +440,7 @@ ServerLoadConfiguration(
         // Load the server's certificate from the default certificate store,
         // using the provided certificate hash.
         //
-        uint32_t CertHashLen =
+        uint64_t CertHashLen =
             DecodeHexBuffer(
                 Cert,
                 sizeof(Config.CertHash.ShaHash),
@@ -654,11 +660,16 @@ ClientSend(
     // the buffer. This indicates this is the last buffer on the stream and the
     // the stream is shut down (in the send direction) immediately after.
     //
-    if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_FIN, SendBuffer))) {
+    uint64_t transmission_counter = 0;
+    while(transmission_counter < transmission_size){
+        if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_FIN, SendBuffer))) {
         printf("StreamSend failed, 0x%x!\n", Status);
         free(SendBufferRaw);
         goto Error;
+        }
+        transmission_counter += SendBufferLength;
     }
+    
 
 Error:
 
@@ -723,7 +734,7 @@ ClientConnectionCallback(
         // received from the server.
         //
         printf("[conn][%p] Resumption ticket received (%u bytes):\n", Connection, Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength);
-        for (uint32_t i = 0; i < Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength; i++) {
+        for (uint64_t i = 0; i < Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicketLength; i++) {
             printf("%.2X", (uint8_t)Event->RESUMPTION_TICKET_RECEIVED.ResumptionTicket[i]);
         }
         printf("\n");
@@ -827,6 +838,16 @@ RunClient(
     //
     // Get the target / server name or IP from the command line.
     //
+    char* endptr;
+    const char* transmission_size_str;;
+    if((transmission_size_str = GetValue(argc,argv,"G")) == NULL){
+        printf("Must specify '-G' argument!\n");
+        Status = QUIC_STATUS_INVALID_PARAMETER;
+        goto Error;
+    }
+    transmission_size = (uint64_t) strtoimax(transmission_size_str,&endptr,10);
+    
+    
     const char* Target;
     if ((Target = GetValue(argc, argv, "target")) == NULL) {
         printf("Must specify '-target' argument!\n");
