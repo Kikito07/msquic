@@ -73,12 +73,12 @@ const uint16_t UdpPort = 4567;
 //
 // The default idle timeout period (1 second) used for the protocol.
 //
-const uint64_t IdleTimeoutMs = 1000;
+const uint64_t IdleTimeoutMs = 0xFFFFFFFFFFFFFFF;
 
 //
 // The length of buffer sent over the streams in the protocol.
 //
-const uint32_t SendBufferLength = 10240;
+const uint32_t SendBufferLength = 100000;
 
 //
 // The total transmission size
@@ -196,10 +196,14 @@ DecodeHexBuffer(
     return HexBufferLen;
 }
 
+//
+// The server callback context
+//
 struct server_context {
-   struct timeval start;
-   int initialized;
-   uint64_t bytes_received;
+    struct timeval start;
+    struct timeval finish;
+    int initialized;
+    uint64_t bytes_received;
 };
 
 //
@@ -263,11 +267,11 @@ ServerStreamCallback(
         printf("[strm][%p] Data sent\n", Stream);
         break;
     case QUIC_STREAM_EVENT_RECEIVE:
-        ;
         if(!ctx->initialized){
             ctx->initialized = 1;
             gettimeofday(&(ctx->start),NULL);
         }
+        gettimeofday(&(ctx->finish),NULL);
         ctx->bytes_received += Event->RECEIVE.TotalBufferLength;
         //
         // Data was received from the peer on the stream.
@@ -280,14 +284,13 @@ ServerStreamCallback(
         // The peer gracefully shut down its send direction of the stream.
         //
         printf("[strm][%p] Peer shut down\n", Stream);
-        struct timeval finish;
         double elapsed = 0.0;
-        gettimeofday(&finish,NULL);
-        elapsed = (finish.tv_sec - (ctx->start).tv_sec) + (finish.tv_usec - (ctx->start).tv_usec) / 1000000.0;
+        elapsed = ((ctx->finish).tv_sec - (ctx->start).tv_sec) + ((ctx->finish).tv_usec - (ctx->start).tv_usec) / 1000000.0;
         printf("elapsed time : %lf\n",elapsed);
         printf("bytes received : %ld\n",ctx->bytes_received);
         printf("goodput : %lf Mbps\n", (ctx->bytes_received)*8/1000000/elapsed);
         //ServerSend(Stream);
+        MsQuic->StreamShutdown(Stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
         break;
     case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
         //
@@ -303,6 +306,7 @@ ServerStreamCallback(
         //
         printf("[strm][%p] All done\n", Stream);
         MsQuic->StreamClose(Stream);
+        exit(0);
         break;
     default:
         break;
@@ -357,6 +361,7 @@ ServerConnectionCallback(
         //
         printf("[conn][%p] All done\n", Connection);
         MsQuic->ConnectionClose(Connection);
+        exit(0);
         break;
     case QUIC_CONNECTION_EVENT_PEER_STREAM_STARTED:
         //
@@ -457,6 +462,7 @@ ServerLoadConfiguration(
     QUIC_CREDENTIAL_CONFIG_HELPER Config;
     memset(&Config, 0, sizeof(Config));
     Config.CredConfig.Flags = QUIC_CREDENTIAL_FLAG_NONE;
+    Config.CredConfig.AllowedCipherSuites = QUIC_ALLOWED_CIPHER_SUITE_AES_128_GCM_SHA256;
 
     const char* Cert;
     const char* KeyFile;
@@ -577,6 +583,19 @@ Error:
     }
 }
 
+
+//
+// The client callback context
+//
+
+struct client_context {
+    uint64_t transmission_counter;
+    uint64_t transmission_size;
+    QUIC_BUFFER *SendBuffer;
+    
+};
+
+
 //
 // The clients's callback for stream events from MsQuic.
 //
@@ -590,9 +609,26 @@ ClientStreamCallback(
     _Inout_ QUIC_STREAM_EVENT* Event
     )
 {
+    QUIC_STATUS Status;
+    struct client_context *ctx = (struct client_context *) Context;
     UNREFERENCED_PARAMETER(Context);
     switch (Event->Type) {
     case QUIC_STREAM_EVENT_SEND_COMPLETE:
+        if((ctx->transmission_counter) < transmission_size){
+            if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, ctx->SendBuffer, 1, QUIC_SEND_FLAG_DELAY_SEND, ctx->SendBuffer))) {
+                printf("StreamSend failed, 0x%x!\n", Status);
+            }
+            ctx->transmission_counter += (uint64_t)SendBufferLength;
+        }
+        else{
+            if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, ctx->SendBuffer, 1, QUIC_SEND_FLAG_NONE, ctx->SendBuffer))) {
+                printf("Closing the connection\n");
+            }
+            if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, ctx->SendBuffer, 1, QUIC_SEND_FLAG_FIN, ctx->SendBuffer))) {
+                printf("Closing the connection\n");
+            }
+            return 0;
+        }
         //
         // A previous StreamSend call has completed, and the context is being
         // returned back to the app.
@@ -649,7 +685,22 @@ ClientSendFirst(
     // Create/allocate a new bidirectional stream. The stream is just allocated
     // and no QUIC stream identifier is assigned until it's started.
     //
-    if (QUIC_FAILED(Status = MsQuic->StreamOpen(Connection, QUIC_STREAM_OPEN_FLAG_NONE, ClientStreamCallback, NULL, &Stream))) {
+
+    SendBufferRaw = (uint8_t*)malloc(sizeof(QUIC_BUFFER) + SendBufferLength);
+    if (SendBufferRaw == NULL) {
+        printf("SendBuffer allocation failed!\n");
+        Status = QUIC_STATUS_OUT_OF_MEMORY;
+        goto Error;
+    }
+    SendBuffer = (QUIC_BUFFER*)SendBufferRaw;
+    SendBuffer->Buffer = SendBufferRaw + sizeof(QUIC_BUFFER);
+    SendBuffer->Length = SendBufferLength;
+    struct client_context *ctx = malloc(sizeof(struct client_context));
+    ctx->SendBuffer = SendBuffer;
+    ctx->transmission_counter = 0;
+    ctx->transmission_size = transmission_size;
+
+    if (QUIC_FAILED(Status = MsQuic->StreamOpen(Connection, QUIC_STREAM_OPEN_FLAG_NONE, ClientStreamCallback, ctx, &Stream))) {
         printf("StreamOpen failed, 0x%x!\n", Status);
         goto Error;
     }
@@ -665,20 +716,10 @@ ClientSendFirst(
         MsQuic->StreamClose(Stream);
         goto Error;
     }
-
     //
     // Allocates and builds the buffer to send over the stream.
     //
-    SendBufferRaw = (uint8_t*)malloc(sizeof(QUIC_BUFFER) + SendBufferLength);
-    if (SendBufferRaw == NULL) {
-        printf("SendBuffer allocation failed!\n");
-        Status = QUIC_STATUS_OUT_OF_MEMORY;
-        goto Error;
-    }
-    SendBuffer = (QUIC_BUFFER*)SendBufferRaw;
-    SendBuffer->Buffer = SendBufferRaw + sizeof(QUIC_BUFFER);
-    SendBuffer->Length = SendBufferLength;
-
+   
     printf("[strm][%p] Sending data...\n", Stream);
 
     //
@@ -687,21 +728,14 @@ ClientSendFirst(
     // the stream is shut down (in the send direction) immediately after.
     //
     
-    uint64_t transmission_counter = 0;
-    while(transmission_counter < transmission_size){
-        if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_NONE, SendBuffer))) {
-        printf("StreamSend failed, 0x%x!\n", Status);
-        free(SendBufferRaw);
-        goto Error;
-        }
-        transmission_counter += (uint64_t)SendBufferLength;
-        printf("transmission_counter : %ld\n",transmission_counter);
-    }
-    if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_FIN, SendBuffer))) {
+    // uint64_t transmission_counter = 0;
+    
+    if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_NONE, SendBuffer))) {
         printf("StreamSend failed, 0x%x!\n", Status);
         free(SendBufferRaw);
         goto Error;
     }
+    ctx->transmission_counter += (uint64_t)SendBufferLength;
     
 
 Error:
@@ -731,7 +765,7 @@ ClientConnectionCallback(
         // The handshake has completed for the connection.
         //
         printf("[conn][%p] Connected\n", Connection);
-        ClientSend(Connection);
+        ClientSendFirst(Connection);
         break;
     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
         //
@@ -799,6 +833,7 @@ ClientLoadConfiguration(
     //
     QUIC_CREDENTIAL_CONFIG CredConfig;
     memset(&CredConfig, 0, sizeof(CredConfig));
+    CredConfig.AllowedCipherSuites = QUIC_ALLOWED_CIPHER_SUITE_AES_128_GCM_SHA256;
     CredConfig.Type = QUIC_CREDENTIAL_TYPE_NONE;
     CredConfig.Flags = QUIC_CREDENTIAL_FLAG_CLIENT;
     if (Unsecure) {
