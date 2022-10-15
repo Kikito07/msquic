@@ -109,10 +109,10 @@ QuicSettingsSetDefault(
         Settings->VersionNegotiationExtEnabled = QUIC_DEFAULT_VERSION_NEGOTIATION_EXT_ENABLED;
     }
     if (!Settings->IsSet.MinimumMtu) {
-        Settings->MinimumMtu = QUIC_DPLPMUTD_DEFAULT_MIN_MTU;
+        Settings->MinimumMtu = QUIC_DPLPMTUD_DEFAULT_MIN_MTU;
     }
     if (!Settings->IsSet.MaximumMtu) {
-        Settings->MaximumMtu = QUIC_DPLPMUTD_DEFAULT_MAX_MTU;
+        Settings->MaximumMtu = QUIC_DPLPMTUD_DEFAULT_MAX_MTU;
     }
     if (!Settings->IsSet.MtuDiscoveryMissingProbeCount) {
         Settings->MtuDiscoveryMissingProbeCount = QUIC_DPLPMTUD_MAX_PROBES;
@@ -128,6 +128,12 @@ QuicSettingsSetDefault(
     }
     if (!Settings->IsSet.CongestionControlAlgorithm) {
         Settings->CongestionControlAlgorithm = QUIC_CONGESTION_CONTROL_ALGORITHM_DEFAULT;
+    }
+    if (!Settings->IsSet.DestCidUpdateIdleTimeoutMs) {
+        Settings->DestCidUpdateIdleTimeoutMs = QUIC_DEFAULT_DEST_CID_UPDATE_IDLE_TIMEOUT_MS;
+    }
+    if (!Settings->IsSet.GreaseQuicBitEnabled) {
+        Settings->GreaseQuicBitEnabled = QUIC_DEFAULT_GREASE_QUIC_BIT_ENABLED;
     }
 }
 
@@ -257,6 +263,12 @@ QuicSettingsCopy(
     }
     if (!Destination->IsSet.CongestionControlAlgorithm) {
         Destination->CongestionControlAlgorithm = Source->CongestionControlAlgorithm;
+    }
+    if (!Destination->IsSet.DestCidUpdateIdleTimeoutMs) {
+        Destination->DestCidUpdateIdleTimeoutMs = Source->DestCidUpdateIdleTimeoutMs;
+    }
+    if (!Destination->IsSet.GreaseQuicBitEnabled) {
+        Destination->GreaseQuicBitEnabled = Source->GreaseQuicBitEnabled;
     }
 }
 
@@ -489,21 +501,21 @@ QuicSettingApply(
 
     if (AllowMtuChanges) {
         uint16_t MinimumMtu =
-            Destination->IsSet.MinimumMtu ? Destination->MinimumMtu : QUIC_DPLPMUTD_MIN_MTU;
+            Destination->IsSet.MinimumMtu ? Destination->MinimumMtu : QUIC_DPLPMTUD_MIN_MTU;
         uint16_t MaximumMtu =
             Destination->IsSet.MaximumMtu ? Destination->MaximumMtu : CXPLAT_MAX_MTU;
         if (Source->IsSet.MinimumMtu && (!Destination->IsSet.MinimumMtu || OverWrite)) {
             MinimumMtu = Source->MinimumMtu;
-            if (MinimumMtu < QUIC_DPLPMUTD_MIN_MTU) {
-                MinimumMtu = QUIC_DPLPMUTD_MIN_MTU;
+            if (MinimumMtu < QUIC_DPLPMTUD_MIN_MTU) {
+                MinimumMtu = QUIC_DPLPMTUD_MIN_MTU;
             } else if (MinimumMtu > CXPLAT_MAX_MTU) {
                 MinimumMtu = CXPLAT_MAX_MTU;
             }
         }
         if (Source->IsSet.MaximumMtu && (!Destination->IsSet.MaximumMtu || OverWrite)) {
             MaximumMtu = Source->MaximumMtu;
-            if (MaximumMtu < QUIC_DPLPMUTD_MIN_MTU) {
-                MaximumMtu = QUIC_DPLPMUTD_MIN_MTU;
+            if (MaximumMtu < QUIC_DPLPMTUD_MIN_MTU) {
+                MaximumMtu = QUIC_DPLPMTUD_MIN_MTU;
             } else if (MaximumMtu > CXPLAT_MAX_MTU) {
                 MaximumMtu = CXPLAT_MAX_MTU;
             }
@@ -544,6 +556,16 @@ QuicSettingApply(
     if (Source->IsSet.CongestionControlAlgorithm && (!Destination->IsSet.CongestionControlAlgorithm || OverWrite)) {
         Destination->CongestionControlAlgorithm = Source->CongestionControlAlgorithm;
         Destination->IsSet.CongestionControlAlgorithm = TRUE;
+    }
+
+    if (Source->IsSet.DestCidUpdateIdleTimeoutMs && (!Destination->IsSet.DestCidUpdateIdleTimeoutMs || OverWrite)) {
+        Destination->DestCidUpdateIdleTimeoutMs = Source->DestCidUpdateIdleTimeoutMs;
+        Destination->IsSet.DestCidUpdateIdleTimeoutMs = TRUE;
+    }
+
+    if (Source->IsSet.GreaseQuicBitEnabled && (!Destination->IsSet.GreaseQuicBitEnabled || OverWrite)) {
+        Destination->GreaseQuicBitEnabled = Source->GreaseQuicBitEnabled;
+        Destination->IsSet.GreaseQuicBitEnabled = TRUE;
     }
 
     return TRUE;
@@ -1023,13 +1045,13 @@ VersionSettingsFail:
     }
     if (MaximumMtu > CXPLAT_MAX_MTU) {
         MaximumMtu = CXPLAT_MAX_MTU;
-    } else if (MaximumMtu < QUIC_DPLPMUTD_MIN_MTU) {
-        MaximumMtu = QUIC_DPLPMUTD_MIN_MTU;
+    } else if (MaximumMtu < QUIC_DPLPMTUD_MIN_MTU) {
+        MaximumMtu = QUIC_DPLPMTUD_MIN_MTU;
     }
     if (MinimumMtu > CXPLAT_MAX_MTU) {
         MinimumMtu = CXPLAT_MAX_MTU;
-    } else if (MinimumMtu < QUIC_DPLPMUTD_MIN_MTU) {
-        MinimumMtu = QUIC_DPLPMUTD_MIN_MTU;
+    } else if (MinimumMtu < QUIC_DPLPMTUD_MIN_MTU) {
+        MinimumMtu = QUIC_DPLPMTUD_MIN_MTU;
     }
     if (MinimumMtu <= MaximumMtu) {
         Settings->MaximumMtu = MaximumMtu;
@@ -1086,6 +1108,26 @@ VersionSettingsFail:
         if (Value < QUIC_CONGESTION_CONTROL_ALGORITHM_MAX) {
             Settings->CongestionControlAlgorithm = (QUIC_CONGESTION_CONTROL_ALGORITHM)Value;
         }
+    }
+    if (!Settings->IsSet.DestCidUpdateIdleTimeoutMs) {
+        Value = QUIC_DEFAULT_DEST_CID_UPDATE_IDLE_TIMEOUT_MS;
+        ValueLen = sizeof(Value);
+        CxPlatStorageReadValue(
+            Storage,
+            QUIC_SETTING_DEST_CID_UPDATE_IDLE_TIMEOUT_MS,
+            (uint8_t*)&Value,
+            &ValueLen);
+        Settings->DestCidUpdateIdleTimeoutMs = Value;
+    }
+    if (!Settings->IsSet.GreaseQuicBitEnabled) {
+        Value = QUIC_DEFAULT_GREASE_QUIC_BIT_ENABLED;
+        ValueLen = sizeof(Value);
+        CxPlatStorageReadValue(
+            Storage,
+            QUIC_SETTING_GREASE_QUIC_BIT_ENABLED,
+            (uint8_t*)&Value,
+            &ValueLen);
+        Settings->GreaseQuicBitEnabled = !!Value;
     }
 }
 
@@ -1144,6 +1186,8 @@ QuicSettingsDump(
     QuicTraceLogVerbose(SettingDumpMaxBindingStatelessOper, "[sett] MaxBindingStatelessOper= %hu", Settings->MaxBindingStatelessOperations);
     QuicTraceLogVerbose(SettingDumpStatelessOperExpirMs,    "[sett] StatelessOperExpirMs   = %hu", Settings->StatelessOperationExpirationMs);
     QuicTraceLogVerbose(SettingCongestionControlAlgorithm,  "[sett] CongestionControlAlgorithm = %hu", Settings->CongestionControlAlgorithm);
+    QuicTraceLogVerbose(SettingDestCidUpdateIdleTimeoutMs,  "[sett] DestCidUpdateIdleTimeoutMs = %u", Settings->DestCidUpdateIdleTimeoutMs);
+    QuicTraceLogVerbose(SettingGreaseQuicBitEnabled,        "[sett] GreaseQuicBitEnabled   = %hhu", Settings->GreaseQuicBitEnabled);
 }
 
 _IRQL_requires_max_(PASSIVE_LEVEL)
@@ -1231,7 +1275,6 @@ QuicSettingsDumpNew(
     if (Settings->IsSet.ServerResumptionLevel) {
         QuicTraceLogVerbose(SettingDumpServerResumptionLevel,       "[sett] ServerResumptionLevel  = %hhu", Settings->ServerResumptionLevel);
     }
-
     if (Settings->IsSet.VersionSettings) {
         QuicTraceLogVerbose(SettingDumpAcceptedVersionsLength,      "[sett] AcceptedVersionslength = %u", Settings->VersionSettings->AcceptableVersionsLength);
         QuicTraceLogVerbose(SettingDumpOfferedVersionsLength,       "[sett] OfferedVersionslength  = %u", Settings->VersionSettings->OfferedVersionsLength);
@@ -1249,7 +1292,6 @@ QuicSettingsDumpNew(
     if (Settings->IsSet.VersionNegotiationExtEnabled) {
         QuicTraceLogVerbose(SettingDumpVersionNegoExtEnabled,       "[sett] Version Negotiation Ext Enabled = %hhu", Settings->VersionNegotiationExtEnabled);
     }
-
     if (Settings->IsSet.MinimumMtu) {
         QuicTraceLogVerbose(SettingDumpMinimumMtu,                  "[sett] MinimumMtu             = %hu", Settings->MinimumMtu);
     }
@@ -1262,16 +1304,20 @@ QuicSettingsDumpNew(
     if (Settings->IsSet.MtuDiscoveryMissingProbeCount) {
         QuicTraceLogVerbose(SettingDumpMtuMissingProbeCount,        "[sett] MtuMissingProbeCount   = %hhu", Settings->MtuDiscoveryMissingProbeCount);
     }
-
     if (Settings->IsSet.MaxBindingStatelessOperations) {
         QuicTraceLogVerbose(SettingDumpMaxBindingStatelessOper,     "[sett] MaxBindingStatelessOper= %hu", Settings->MaxBindingStatelessOperations);
     }
     if (Settings->IsSet.StatelessOperationExpirationMs) {
         QuicTraceLogVerbose(SettingDumpStatelessOperExpirMs,        "[sett] StatelessOperExpirMs   = %hu", Settings->StatelessOperationExpirationMs);
     }
-
     if (Settings->IsSet.CongestionControlAlgorithm) {
         QuicTraceLogVerbose(SettingCongestionControlAlgorithm,      "[sett] CongestionControlAlgorithm = %hu", Settings->CongestionControlAlgorithm);
+    }
+    if (Settings->IsSet.DestCidUpdateIdleTimeoutMs) {
+        QuicTraceLogVerbose(SettingDestCidUpdateIdleTimeoutMs,      "[sett] DestCidUpdateIdleTimeoutMs = %u", Settings->DestCidUpdateIdleTimeoutMs);
+    }
+    if (Settings->IsSet.GreaseQuicBitEnabled) {
+        QuicTraceLogVerbose(SettingGreaseQuicBitEnabled,            "[sett] GreaseQuicBitEnabled   = %hhu", Settings->GreaseQuicBitEnabled);
     }
 }
 
@@ -1432,6 +1478,7 @@ QuicSettingsSettingsToInternal(
     SETTING_COPY_TO_INTERNAL(MigrationEnabled, Settings, InternalSettings);
     SETTING_COPY_TO_INTERNAL(DatagramReceiveEnabled, Settings, InternalSettings);
     SETTING_COPY_TO_INTERNAL(ServerResumptionLevel, Settings, InternalSettings);
+    SETTING_COPY_TO_INTERNAL(GreaseQuicBitEnabled, Settings, InternalSettings); // We can't copy it via sized version due to bit field operation not allowed on it.
 
     //
     // N.B. Anything after this needs to be size checked
@@ -1446,6 +1493,13 @@ QuicSettingsSettingsToInternal(
     //     Settings,
     //     SettingsSize,
     //     InternalSettings);
+
+    SETTING_COPY_TO_INTERNAL_SIZED(
+        DestCidUpdateIdleTimeoutMs,
+        QUIC_SETTINGS,
+        Settings,
+        SettingsSize,
+        InternalSettings);
 
     return QUIC_STATUS_SUCCESS;
 }
@@ -1517,6 +1571,7 @@ QuicSettingsGetSettings(
     SETTING_COPY_FROM_INTERNAL(MigrationEnabled, Settings, InternalSettings);
     SETTING_COPY_FROM_INTERNAL(DatagramReceiveEnabled, Settings, InternalSettings);
     SETTING_COPY_FROM_INTERNAL(ServerResumptionLevel, Settings, InternalSettings);
+    SETTING_COPY_FROM_INTERNAL(GreaseQuicBitEnabled, Settings, InternalSettings); // We can't copy it via sized version due to bit field operation not allowed on it.
 
     //
     // N.B. Anything after this needs to be size checked
@@ -1531,6 +1586,13 @@ QuicSettingsGetSettings(
     //     Settings,
     //     *SettingsLength,
     //     InternalSettings);
+
+    SETTING_COPY_FROM_INTERNAL_SIZED(
+        DestCidUpdateIdleTimeoutMs,
+        QUIC_SETTINGS,
+        Settings,
+        *SettingsLength,
+        InternalSettings);
 
     *SettingsLength = CXPLAT_MIN(*SettingsLength, sizeof(QUIC_SETTINGS));
 

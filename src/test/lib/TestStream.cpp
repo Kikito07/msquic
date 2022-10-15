@@ -24,7 +24,7 @@ TestStream::TestStream(
     IsUnidirectional(IsUnidirectional), IsPingSource(IsPingSource), UsedZeroRtt(false),
     AllDataSent(IsUnidirectional && !IsPingSource), AllDataReceived(IsUnidirectional && IsPingSource),
     SendShutdown(IsUnidirectional && !IsPingSource), RecvShutdown(IsUnidirectional && IsPingSource),
-    IsShutdown(false), ConnectionShutdown(false), ConnectionShutdownByApp(false), ConnectionClosedRemotely(false), ConnectionErrorCode(0),
+    IsShutdown(false), ConnectionShutdown(false), ConnectionShutdownByApp(false), ConnectionClosedRemotely(false), ConnectionErrorCode(0), ConnectionCloseStatus(0),
     BytesToSend(0), OutstandingSendRequestCount(0), BytesReceived(0),
     StreamShutdownCallback(StreamShutdownHandler), Context(nullptr)
 {
@@ -119,7 +119,8 @@ TestStream::Start(
 
 bool
 TestStream::StartPing(
-    _In_ uint64_t PayloadLength
+    _In_ uint64_t PayloadLength,
+    _In_ bool SendFin
     )
 {
     BytesToSend = PayloadLength / MaxSendBuffers;
@@ -138,7 +139,7 @@ TestStream::StartPing(
         if (PayloadLength == 0) {
             Flags |= QUIC_SEND_FLAG_START;
         }
-        if (resultingBytesLeft == 0) {
+        if (SendFin && resultingBytesLeft == 0) {
             Flags |= QUIC_SEND_FLAG_FIN;
         }
 
@@ -358,6 +359,7 @@ TestStream::HandleStreamEvent(
         ConnectionShutdownByApp = Event->SHUTDOWN_COMPLETE.ConnectionShutdownByApp;
         ConnectionClosedRemotely = Event->SHUTDOWN_COMPLETE.ConnectionClosedRemotely;
         ConnectionErrorCode = Event->SHUTDOWN_COMPLETE.ConnectionErrorCode;
+        ConnectionCloseStatus = Event->SHUTDOWN_COMPLETE.ConnectionCloseStatus;
         if (QUIC_SUCCEEDED(
             MsQuic->GetParam(
                 QuicStream,

@@ -535,6 +535,24 @@
                 value="12"
                 />
           </valueMap>
+          <valueMap name="map_QUIC_EXECUTION_PROFILE">
+            <map
+                message="$(string.Enum.QUIC_EXECUTION_PROFILE.QUIC_EXECUTION_PROFILE_LOW_LATENCY)"
+                value="0"
+                />
+            <map
+                message="$(string.Enum.QUIC_EXECUTION_PROFILE.QUIC_EXECUTION_PROFILE_TYPE_MAX_THROUGHPUT)"
+                value="1"
+                />
+            <map
+                message="$(string.Enum.QUIC_EXECUTION_PROFILE.QUIC_EXECUTION_PROFILE_TYPE_SCAVENGER)"
+                value="2"
+                />
+            <map
+                message="$(string.Enum.QUIC_EXECUTION_PROFILE.QUIC_EXECUTION_PROFILE_TYPE_REAL_TIME)"
+                value="3"
+                />
+          </valueMap>
         </maps>
         <templates>
           <template tid="tid_MESSAGE">
@@ -661,6 +679,21 @@
             <data
                 inType="win:AnsiString"
                 name="AppName"
+                />
+          </template>
+          <template tid="tid_REGISTRATION_STRING_EXEC">
+            <data
+                inType="win:Pointer"
+                name="Registration"
+                />
+            <data
+                inType="win:AnsiString"
+                name="AppName"
+                />
+            <data
+                inType="win:UInt32"
+                map="map_QUIC_EXECUTION_PROFILE"
+                name="ExecProfile"
                 />
           </template>
           <template tid="tid_REGISTRATION_ERROR">
@@ -1229,6 +1262,10 @@
                 inType="win:UInt32"
                 name="CongestionWindow"
                 />
+            <data
+                inType="win:AnsiString"
+                name="Cc"
+                />
           </template>
           <template tid="tid_CONN_PACKET_STATISTICS">
             <data
@@ -1369,6 +1406,44 @@
             <data
                 inType="win:UInt64"
                 name="Delay"
+                />
+          </template>
+          <template tid="tid_CONN_BBR">
+            <data
+                inType="win:Pointer"
+                name="Connection"
+                />
+            <data
+                inType="win:UInt32"
+                name="BbrState"
+                />
+            <data
+                inType="win:UInt32"
+                name="RecoveryState"
+                />
+            <data
+                inType="win:UInt32"
+                name="CongestionWindow"
+                />
+            <data
+                inType="win:UInt32"
+                name="BytesInFlight"
+                />
+            <data
+                inType="win:UInt32"
+                name="BytesInFlightMax"
+                />
+            <data
+                inType="win:UInt64"
+                name="EstMinRtt"
+                />
+            <data
+                inType="win:UInt64"
+                name="EstBw"
+                />
+            <data
+                inType="win:UInt32"
+                name="IsAppLimited"
                 />
           </template>
           <template tid="tid_STREAM">
@@ -2120,6 +2195,24 @@
               symbol="QuicRegistrationShutdown"
               template="tid_REGISTRATION_FLAGS_ERRORCODE"
               value="1030"
+              />
+          <event
+              keywords="ut:Registration ut:LowVolume"
+              level="win:Informational"
+              message="$(string.Etw.RegistrationCreatedV2)"
+              opcode="Registration"
+              symbol="QuicRegistrationCreatedV2"
+              template="tid_REGISTRATION_STRING_EXEC"
+              value="1031"
+              />
+          <event
+              keywords="ut:Registration ut:LowVolume"
+              level="win:Informational"
+              message="$(string.Etw.RegistrationRundownV2)"
+              opcode="Registration"
+              symbol="QuicRegistrationRundownV2"
+              template="tid_REGISTRATION_STRING_EXEC"
+              value="1032"
               />
           <!-- 2048 - 3071 | Worker Events -->
           <event
@@ -2918,6 +3011,15 @@
               template="tid_CONN_TIMER"
               value="5185"
               />
+          <event
+              keywords="ut:Connection ut:DataFlow"
+              level="win:Verbose"
+              message="$(string.Etw.Bbr)"
+              opcode="Connection"
+              symbol="QuicConnBbr"
+              template="tid_CONN_BBR"
+              value="5186"
+              />
           <!-- 6144 - 7167 | Stream Events -->
           <event
               keywords="ut:Stream ut:LowVolume ut:RPS"
@@ -3534,7 +3636,7 @@
             />
         <string
             id="Etw.ConnStats"
-            value="[conn][%1] STATS: SRtt=%2 CongestionCount=%3 PersistentCongestionCount=%4 SendTotalBytes=%5 RecvTotalBytes=%6 CongestionWindow=%7"
+            value="[conn][%1] STATS: SRtt=%2 CongestionCount=%3 PersistentCongestionCount=%4 SendTotalBytes=%5 RecvTotalBytes=%6 CongestionWindow=%7 Cc=%8"
             />
         <string
             id="Etw.ConnPacketStats"
@@ -3578,7 +3680,7 @@
             />
         <string
             id="Etw.ConnVNEOtherVersionList"
-            value="[conn][%1] VerInfo Other Versions List: %3"
+            value="[conn][%1] VerInfo Available Versions List: %3"
             />
         <string
             id="Etw.ConnClientReceivedVersionList"
@@ -3697,8 +3799,16 @@
             value="[ reg][%1] Created, AppName=%2"
             />
         <string
+            id="Etw.RegistrationCreatedV2"
+            value="[ reg][%1] Created, AppName=%2, ExecProfile=%3"
+            />
+        <string
             id="Etw.RegistrationRundown"
             value="[ reg][%1] Rundown, AppName=%2"
+            />
+        <string
+            id="Etw.RegistrationRundownV2"
+            value="[ reg][%1] Rundown, AppName=%2, ExecProfile=%3"
             />
         <string
             id="Etw.RegistrationDestroyed"
@@ -4346,6 +4456,22 @@
             value="SCHEDULING"
             />
         <string
+            id="Enum.QUIC_EXECUTION_PROFILE.QUIC_EXECUTION_PROFILE_LOW_LATENCY"
+            value="LOW_LATENCY"
+            />
+        <string
+            id="Enum.QUIC_EXECUTION_PROFILE.QUIC_EXECUTION_PROFILE_TYPE_MAX_THROUGHPUT"
+            value="MAX_THROUGHPUT"
+            />
+        <string
+            id="Enum.QUIC_EXECUTION_PROFILE.QUIC_EXECUTION_PROFILE_TYPE_SCAVENGER"
+            value="SCAVENGER"
+            />
+        <string
+            id="Enum.QUIC_EXECUTION_PROFILE.QUIC_EXECUTION_PROFILE_TYPE_REAL_TIME"
+            value="REAL_TIME"
+            />
+        <string
             id="Etw.ConnNoListenerIp"
             value="[conn][%1] No Listener for IP address: %3"
             />
@@ -4368,6 +4494,10 @@
         <string
             id="Etw.ConnExpiredTimer"
             value="[conn][%1] %2 expired"
+            />
+        <string
+            id="Etw.Bbr"
+            value="[conn][%1] BBR: State=%2 RState=%3 CongestionWindow=%4 BytesInFlight=%5 BytesInFlightMax=%6 MinRttEst=%7 EstBw=%8 AppLimited=%9"
             />
       </stringTable>
     </resources>

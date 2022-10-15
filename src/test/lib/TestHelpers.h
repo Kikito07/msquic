@@ -83,6 +83,7 @@ struct ServerAcceptContext {
     QUIC_STATUS ExpectedClientCertValidationResult[2]{};
     uint32_t ExpectedClientCertValidationResultCount{0};
     QUIC_STATUS PeerCertEventReturnStatus{false};
+    QUIC_PRIVATE_TRANSPORT_PARAMETER* TestTP{nullptr};
     ServerAcceptContext(TestConnection** _NewConnection) :
         NewConnection(_NewConnection) {
         CxPlatEventInitialize(&NewConnectionReady, TRUE, FALSE);
@@ -98,6 +99,7 @@ struct ServerAcceptContext {
     }
 };
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 struct ClearGlobalVersionListScope {
     ~ClearGlobalVersionListScope() {
         MsQuicVersionSettings Settings(nullptr, 0);
@@ -117,6 +119,7 @@ struct ClearGlobalVersionListScope {
                 &Default));
     }
 };
+#endif
 
 //
 // Simulating Connection's status to be QUIC_CONN_BAD_START_STATE
@@ -153,11 +156,15 @@ void SimpleGetParamTest(HQUIC Handle, uint32_t Param, size_t ExpectedLength, voi
                 Param,
                 &Length,
                 nullptr));
-    TEST_EQUAL(ExpectedLength, Length);
+    if (ExpectedLength != Length) {
+        TEST_FAILURE("ExpectedLength (%u) != Length (%u)", ExpectedLength, Length);
+        return;
+    }
 
     void* Value = CXPLAT_ALLOC_NONPAGED(Length, QUIC_POOL_TEST);
     if (Value == nullptr) {
         TEST_FAILURE("Out of memory for testing SetParam for global parameter");
+        return;
     }
     TEST_QUIC_SUCCEEDED(
         MsQuic->GetParam(
@@ -191,8 +198,12 @@ struct GlobalSettingScope {
                 Parameter,
                 &BufferLength,
                 nullptr);
+#ifndef QUIC_API_ENABLE_PREVIEW_FEATURES
+        TEST_TRUE(Status == QUIC_STATUS_BUFFER_TOO_SMALL);
+#else
         TEST_TRUE(Status == QUIC_STATUS_BUFFER_TOO_SMALL ||
-            (Parameter == QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS && Status == QUIC_STATUS_SUCCESS));
+            (Parameter == QUIC_PARAM_GLOBAL_EXECUTION_CONFIG && Status == QUIC_STATUS_SUCCESS));
+#endif
 
         OriginalValue = CXPLAT_ALLOC_NONPAGED(BufferLength, QUIC_POOL_TEST);
         if (OriginalValue == nullptr) {
@@ -889,3 +900,19 @@ private:
         return PrivateAddresses[Key % PrivateAddressesCount];
     }
 };
+
+_IRQL_requires_max_(PASSIVE_LEVEL)
+inline
+BOOLEAN
+WaitForMsQuicInUse() {
+    int Count = 0;
+    BOOLEAN MsQuicInUse = FALSE;
+    QUIC_STATUS Status = QUIC_STATUS_SUCCESS;
+    uint32_t MsQuicInUseLen = sizeof(MsQuicInUse);
+    do {
+        CxPlatSleep(100);
+        Status = MsQuic->GetParam(nullptr, QUIC_PARAM_GLOBAL_IN_USE, &MsQuicInUseLen, &MsQuicInUse);
+    } while(!MsQuicInUse && Count++ < 100);
+
+    return MsQuicInUse && Status == QUIC_STATUS_SUCCESS;
+}

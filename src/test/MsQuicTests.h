@@ -9,7 +9,9 @@ Abstract:
 
 --*/
 
+#ifndef QUIC_OFFICIAL_RELEASE
 #define QUIC_API_ENABLE_PREVIEW_FEATURES
+#endif
 
 #include "msquic.hpp"
 
@@ -128,12 +130,14 @@ QuicTestConnect(
     _In_ bool ServerStatelessRetry,
     _In_ bool ClientUsesOldVersion,
     _In_ bool MultipleALPNs,
+    _In_ bool GreaseQuicBitExtension,
     _In_ QUIC_TEST_ASYNC_CONFIG_MODE AsyncConfiguration,
     _In_ bool MultiPacketClientInitial,
     _In_ QUIC_TEST_RESUMPTION_MODE SessionResumption,
     _In_ uint8_t RandomLossPercentage // 0 to 100
     );
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 void
 QuicTestVersionNegotiation(
     _In_ int Family
@@ -179,6 +183,7 @@ void
 QuicTestFailedVersionNegotiation(
     _In_ int Family
     );
+#endif // QUIC_API_ENABLE_PREVIEW_FEATURES
 
 void
 QuicTestCustomCertificateValidation(
@@ -217,14 +222,23 @@ QuicTestInterfaceBinding(
     _In_ int Family
     );
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 void
 QuicTestCibirExtension(
     _In_ int Family,
     _In_ uint8_t Mode // server = &1, client = &2
     );
+#endif
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 void
 QuicTestResumptionAcrossVersions();
+#endif
+
+void
+QuicTestChangeAlpn(
+    void
+    );
 
 //
 // Negative Handshake Tests
@@ -278,6 +292,29 @@ void
 QuicTestClientBlockedSourcePort(
     _In_ int Family
     );
+
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
+void
+QuicTestVNTPOddSize(
+    _In_ bool TestServer,
+    _In_ uint16_t VNTPSize
+    );
+
+void
+QuicTestVNTPChosenVersionMismatch(
+    _In_ bool TestServer
+    );
+
+void
+QuicTestVNTPChosenVersionZero(
+    _In_ bool TestServer
+    );
+
+void
+QuicTestVNTPOtherVersionZero(
+    _In_ bool TestServer
+    );
+#endif
 
 //
 // Post Handshake Tests
@@ -334,6 +371,11 @@ QuicTestConnectAndPing(
 void
 QuicTestConnectAndIdle(
     _In_ bool EnableKeepAlive
+    );
+
+void
+QuicTestConnectAndIdleForDestCidChange(
+    void
     );
 
 void
@@ -509,9 +551,11 @@ void
 QuicTestStorage(
     );
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 void
 QuicTestVersionStorage(
     );
+#endif
 
 //
 // Platform Specific Functions
@@ -632,6 +676,7 @@ typedef struct {
     uint8_t ServerStatelessRetry;
     uint8_t ClientUsesOldVersion;
     uint8_t MultipleALPNs;
+    uint8_t GreaseQuicBitExtension;
     uint8_t AsyncConfiguration;
     uint8_t MultiPacketClientInitial;
     uint8_t SessionResumption;
@@ -1070,4 +1115,27 @@ typedef struct {
 #define IOCTL_QUIC_RUN_VERSION_STORAGE \
     QUIC_CTL_CODE(100, METHOD_BUFFERED, FILE_WRITE_DATA)
 
-#define QUIC_MAX_IOCTL_FUNC_CODE 100
+#define IOCTL_QUIC_RUN_CONNECT_AND_IDLE_FOR_DEST_CID_CHANGE \
+    QUIC_CTL_CODE(101, METHOD_BUFFERED, FILE_WRITE_DATA)
+
+#define IOCTL_QUIC_RUN_CHANGE_ALPN \
+    QUIC_CTL_CODE(102, METHOD_BUFFERED, FILE_WRITE_DATA)
+
+typedef struct {
+    BOOLEAN TestServer;
+    uint8_t VnTpSize;
+} QUIC_RUN_VN_TP_ODD_SIZE_PARAMS;
+
+#define IOCTL_QUIC_RUN_VN_TP_ODD_SIZE \
+    QUIC_CTL_CODE(103, METHOD_BUFFERED, FILE_WRITE_DATA)
+
+#define IOCTL_QUIC_RUN_VN_TP_CHOSEN_VERSION_MISMATCH \
+    QUIC_CTL_CODE(104, METHOD_BUFFERED, FILE_WRITE_DATA)
+
+#define IOCTL_QUIC_RUN_VN_TP_CHOSEN_VERSION_ZERO \
+    QUIC_CTL_CODE(105, METHOD_BUFFERED, FILE_WRITE_DATA)
+
+#define IOCTL_QUIC_RUN_VN_TP_OTHER_VERSION_ZERO \
+    QUIC_CTL_CODE(106, METHOD_BUFFERED, FILE_WRITE_DATA)
+
+#define QUIC_MAX_IOCTL_FUNC_CODE 106

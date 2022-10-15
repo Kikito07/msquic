@@ -28,7 +28,7 @@ The following settings are available via registry as well as via [QUIC_SETTINGS]
 |------------------------------------|------------|-----------------------------|-------------------|-------------------------------------------------------------------------------------------------------------------------------|
 | Max Bytes per Key                  | uint64_t   | MaxBytesPerKey              |   274,877,906,944 | Maximum number of bytes to encrypt with a single 1-RTT encryption key before initiating key update.                           |
 | Handshake Idle Timeout             | uint64_t   | HandshakeIdleTimeoutMs      |            10,000 | How long a handshake can idle before it is discarded.                                                                         |
-| Idle Timeout                       | uint64_t   | IdleTimeoutMs               |            30,000 | How long a connection can go idle before it is gracefully shut down. 0 to disable timeout                                                          |
+| Idle Timeout                       | uint64_t   | IdleTimeoutMs               |            30,000 | How long a connection can go idle before it is gracefully shut down. 0 to disable timeout                                     |
 | Max TLS Send Buffer (Client)       | uint32_t   | TlsClientMaxSendBuffer      |             4,096 | How much client TLS data to buffer.                                                                                           |
 | Max TLS Send Buffer (Server)       | uint32_t   | TlsServerMaxSendBuffer      |             8,192 | How much server TLS data to buffer.                                                                                           |
 | Stream Receive Window              | uint32_t   | StreamRecvWindowDefault     |            32,768 | Initial stream receive window size.                                                                                           |
@@ -41,6 +41,7 @@ The following settings are available via registry as well as via [QUIC_SETTINGS]
 | Max ACK Delay                      | uint32_t   | MaxAckDelayMs               |                25 | How long to wait after receiving data before sending an ACK.                                                                  |
 | Disconnect Timeout                 | uint32_t   | DisconnectTimeoutMs         |            16,000 | How long to wait for an ACK before declaring a path dead and disconnecting.                                                   |
 | Keep Alive Interval                | uint32_t   | KeepAliveIntervalMs         |      0 (disabled) | How often to send PING frames to keep a connection alive.                                                                     |
+| Idle Timeout Period Changes DestCid| uint32_t   | DestCidUpdateIdleTimeoutMs  |            20,000 | Idle timeout period after which the destination CID is updated before sending again.                                          |
 | Peer Stream Count (Bidirectional)  | uint16_t   | PeerBidiStreamCount         |                 0 | Number of bidirectional streams to allow the peer to open.                                                                    |
 | Peer Stream Count (Unidirectional) | uint16_t   | PeerUnidiStreamCount        |                 0 | Number of unidirectional streams to allow the peer to open.                                                                   |
 | Retry Memory Limit                 | uint16_t   | RetryMemoryFraction         |        65 (~0.1%) | The percentage of available memory usable for handshake connections before stateless retry is used. Calculated as `N/65535`.  |
@@ -51,12 +52,14 @@ The following settings are available via registry as well as via [QUIC_SETTINGS]
 | Client Migration Support           | uint8_t    | MigrationEnabled            |          1 (TRUE) | Enable clients to migrate IP addresses and tuples. Requires a cooperative load-balancer, or no load-balancer.                 |
 | Datagram Receive Support           | uint8_t    | DatagramReceiveEnabled      |         0 (FALSE) | Advertise support for QUIC datagram extension.                                                                                |
 | Server Resumption Level            | uint8_t    | ServerResumptionLevel       | 0 (No resumption) | Server only. Controls resumption tickets and/or 0-RTT server support.                                                         |
-| Minimum MTU                        | uint16_t   | MinimumMtu                  |              1248 | The minimum MTU supported by a connection. This will be used as the starting MTU.                                             |
+| Grease Quic Bit Support            | uint8_t    | GreaseQuicBitEnabled        |         0 (FALSE) | Advertise support for Grease QUIC Bit extension.                                                                              |
+| Minimum MTU                        | uint16_t   | MinimumMtu                  |              1288 | The minimum MTU supported by a connection. This will be used as the starting MTU.                                             |
 | Maximum MTU                        | uint16_t   | MaximumMtu                  |              1500 | The maximum MTU supported by a connection. This will be the maximum probed value.                                             |
 | MTU Discovery Search Timeout       | uint64_t   | MtuDiscoverySearchCompleteTimeoutUs | 600000000 | The time in microseconds to wait before reattempting MTU probing if max was not reached.                                      |
 | MTU Discovery Missing Probe Count  | uint8_t    | MtuDiscoveryMissingProbeCount  |              3 | The number of MTU probes to retry before exiting MTU probing.                                                                 |
 | Max Binding Stateless Operations   | uint16_t   | MaxBindingStatelessOperations  |            100 | The maximum number of stateless operations that may be queued on a binding at any one time.                                   |
 | Stateless Operation Expiration     | uint16_t   | StatelessOperationExpirationMs |            100 | The time limit between operations for the same endpoint, in milliseconds.                                                     |
+| Congestion Control Algorithm       | uint16_t   | CongestionControlAlgorithm  |         0 (Cubic) | The congestion control algorithm used for the connection.                                                                     |
 
 The types map to registry types as follows:
   - `uint64_t` is a `REG_QWORD`.
@@ -70,7 +73,7 @@ The following settings are available via registry as well as via [QUIC_VERSION_S
 |-----------------------------------|------------|--------------------------|-------------------|-------------------------------------------------------------------------------------------------------------------------------|
 | Acceptable Versions List          | uint32_t[] | AcceptableVersions       | Unset             | Sets the list of versions that a given server instance will use if a client sends a first flight using them. |
 | Offered Versions List             | uint32_t[] | OfferedVersions          | Unset             | Sets the list of versions that a given server instance will send in a Version Negotiation packet if it receives a first flight from an unknown version. This list will most often be equal to the Acceptable Versions list. |
-| Fully-Deployed Versions List      | uint32_t[] | FullyDeployedVersions    | Unset             | Sets the list of QUIC versions that is supported and negotiated by every single QUIC server instance in this deployment. Used to generate the OtherVersions list in the Version Negotiation Extension Transport Parameter. |
+| Fully-Deployed Versions List      | uint32_t[] | FullyDeployedVersions    | Unset             | Sets the list of QUIC versions that is supported and negotiated by every single QUIC server instance in this deployment. Used to generate the AvailableVersions list in the Version Negotiation Extension Transport Parameter. |
 
 The `uint32_t[]` type is a `REG_BINARY` blob of the versions list, with each version in little-endian format.
 
@@ -103,7 +106,7 @@ These parameters are accessed by calling [GetParam](./api/GetParam.md) or [SetPa
 | `QUIC_PARAM_GLOBAL_GLOBAL_SETTINGS`<br> 6         | QUIC_GLOBAL_SETTINGS    | Both      | Globally change global only settings.                                                                 |
 | `QUIC_PARAM_GLOBAL_VERSION_SETTINGS`<br> 7        | QUIC_VERSIONS_SETTINGS  | Both      | Globally change version settings for all subsequent connections.                                      |
 | `QUIC_PARAM_GLOBAL_LIBRARY_GIT_HASH`<br> 8        | char[64]                | Get-only  | Git hash used to build MsQuic (null terminated string)                                                |
-| `QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS`<br> 9     | uint16_t[]              | Both      | Globally change the list of CPUs that datapath can use. Must be set before opening registration.      |
+| `QUIC_PARAM_GLOBAL_EXECUTION_CONFIG`<br> 9        | QUIC_EXECUTION_CONFIG   | Both      | Globally configure the execution model used for QUIC. Must be set before opening registration.      |
 | `QUIC_PARAM_GLOBAL_TLS_PROVIDER`<br> 10           | QUIC_TLS_PROVIDER       | Get-Only  | The TLS provider being used by MsQuic for the TLS handshake.                                          |
 
 ## Registration Parameters

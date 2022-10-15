@@ -175,11 +175,24 @@ typedef union QUIC_CONNECTION_STATE {
         //
         BOOLEAN LocalInterfaceSet : 1;
 
+        //
+        // This value of the fixed bit on send packets.
+        //
+        BOOLEAN FixedBit : 1;
+
 #ifdef CxPlatVerifierEnabledByAddr
         //
         // The calling app is being verified (app or driver verifier).
         //
         BOOLEAN IsVerifying : 1;
+#endif
+
+#if QUIC_TEST_DISABLE_VNE_TP_GENERATION
+        //
+        // Whether to disable automatic generation of VNE transport parameter.
+        // Only used for testing, and thus only enabled for debug builds.
+        //
+        BOOLEAN DisableVneTp : 1;
 #endif
     };
 } QUIC_CONNECTION_STATE;
@@ -229,6 +242,7 @@ typedef struct QUIC_CONN_STATS {
     uint32_t StatelessRetry         : 1;
     uint32_t ResumptionAttempted    : 1;
     uint32_t ResumptionSucceeded    : 1;
+    uint32_t GreaseBitNegotiated    : 1;
 
     //
     // QUIC protocol version used. Network byte order.
@@ -284,6 +298,7 @@ typedef struct QUIC_CONN_STATS {
 
     struct {
         uint32_t KeyUpdateCount;        // Count of key updates completed.
+        uint32_t DestCidUpdateCount;    // Number of times the destination CID changed.
     } Misc;
 
 } QUIC_CONN_STATS;
@@ -833,14 +848,15 @@ QuicConnLogStatistics(
 
     QuicTraceEvent(
         ConnStats,
-        "[conn][%p] STATS: SRtt=%u CongestionCount=%u PersistentCongestionCount=%u SendTotalBytes=%llu RecvTotalBytes=%llu CongestionWindow=%u",
+        "[conn][%p] STATS: SRtt=%u CongestionCount=%u PersistentCongestionCount=%u SendTotalBytes=%llu RecvTotalBytes=%llu CongestionWindow=%u Cc=%s",
         Connection,
         Path->SmoothedRtt,
         Connection->Stats.Send.CongestionCount,
         Connection->Stats.Send.PersistentCongestionCount,
         Connection->Stats.Send.TotalBytes,
         Connection->Stats.Recv.TotalBytes,
-        QuicCongestionControlGetCongestionWindow(&Connection->CongestionControl));
+        QuicCongestionControlGetCongestionWindow(&Connection->CongestionControl),
+        Connection->CongestionControl.Name);
 
     QuicTraceEvent(
         ConnPacketStats,

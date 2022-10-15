@@ -142,12 +142,6 @@ typedef struct QUIC_PATH QUIC_PATH;
 #define QUIC_DEFAULT_RETRY_MEMORY_FRACTION      65 // ~0.1%
 
 //
-// If enabled, workers will poll the number of times before falling back to the
-// wait or delay state.
-//
-//#define QUIC_WORKER_POLLING                     10000
-
-//
 // The maximum amount of queue delay a worker should take on (in ms).
 //
 #define QUIC_MAX_WORKER_QUEUE_DELAY             250
@@ -264,19 +258,31 @@ CXPLAT_STATIC_ASSERT(IS_POWER_OF_TWO(QUIC_MAX_RANGE_DECODE_ACKS), L"Must be powe
 // Minimum MTU allowed to be configured. Must be able to fit a
 // QUIC_MIN_INITIAL_PACKET_LENGTH in an IPv6 datagram.
 //
-#define QUIC_DPLPMUTD_MIN_MTU                   (QUIC_MIN_INITIAL_PACKET_LENGTH + \
-                                                CXPLAT_MIN_IPV6_HEADER_SIZE     + \
+#define QUIC_DPLPMTUD_MIN_MTU                   (QUIC_MIN_INITIAL_PACKET_LENGTH + \
+                                                CXPLAT_MIN_IPV6_HEADER_SIZE + \
                                                 CXPLAT_UDP_HEADER_SIZE)
+
+//
+// The minimum size of the initial packets we send. We pad a little more than
+// the spec-minimum to help with amplification limits for large server
+// certificates. This MUST BE greater than or equal to
+// QUIC_MIN_INITIAL_PACKET_LENGTH.
+//
+#define QUIC_INITIAL_PACKET_LENGTH              1240
+
+CXPLAT_STATIC_ASSERT(QUIC_INITIAL_PACKET_LENGTH >= QUIC_MIN_INITIAL_PACKET_LENGTH, "Packet length too small");
 
 //
 // The minimum IP MTU DPLPMTUD will use by default.
 //
-#define QUIC_DPLPMUTD_DEFAULT_MIN_MTU           QUIC_DPLPMUTD_MIN_MTU
+#define QUIC_DPLPMTUD_DEFAULT_MIN_MTU           (QUIC_INITIAL_PACKET_LENGTH + \
+                                                CXPLAT_MIN_IPV6_HEADER_SIZE + \
+                                                CXPLAT_UDP_HEADER_SIZE)
 
 //
 // The maximum IP MTU DPLPMTUD will use by default.
 //
-#define QUIC_DPLPMUTD_DEFAULT_MAX_MTU           1500
+#define QUIC_DPLPMTUD_DEFAULT_MAX_MTU           1500
 
 //
 // The maximum time an app callback can take before we log a warning.
@@ -490,6 +496,16 @@ CXPLAT_STATIC_ASSERT(
 //
 #define QUIC_CONGESTION_CONTROL_ALGORITHM_DEFAULT   QUIC_CONGESTION_CONTROL_ALGORITHM_CUBIC
 
+//
+// The default idle timeout period after which the source CID is updated before sending again.
+//
+#define QUIC_DEFAULT_DEST_CID_UPDATE_IDLE_TIMEOUT_MS 20000
+
+//
+// The default value for enabling grease quic bit extension.
+//
+#define QUIC_DEFAULT_GREASE_QUIC_BIT_ENABLED         FALSE
+
 /*************************************************************
                   TRANSPORT PARAMETERS
 *************************************************************/
@@ -516,6 +532,7 @@ CXPLAT_STATIC_ASSERT(
 #define QUIC_TP_FLAG_VERSION_NEGOTIATION                    0x00080000
 #define QUIC_TP_FLAG_MIN_ACK_DELAY                          0x00100000
 #define QUIC_TP_FLAG_CIBIR_ENCODING                         0x00200000
+#define QUIC_TP_FLAG_GREASE_QUIC_BIT                        0x00400000
 
 #define QUIC_TP_MAX_PACKET_SIZE_DEFAULT                     65527
 #define QUIC_TP_MAX_UDP_PAYLOAD_SIZE_MIN                    1200
@@ -557,9 +574,11 @@ CXPLAT_STATIC_ASSERT(
 #define QUIC_SETTING_SEND_PACING_DEFAULT            "SendPacingDefault"
 #define QUIC_SETTING_MIGRATION_ENABLED              "MigrationEnabled"
 #define QUIC_SETTING_DATAGRAM_RECEIVE_ENABLED       "DatagramReceiveEnabled"
+#define QUIC_SETTING_GREASE_QUIC_BIT_ENABLED        "GreaseQuicBitEnabled"
 
 #define QUIC_SETTING_INITIAL_WINDOW_PACKETS         "InitialWindowPackets"
 #define QUIC_SETTING_SEND_IDLE_TIMEOUT_MS           "SendIdleTimeoutMs"
+#define QUIC_SETTING_DEST_CID_UPDATE_IDLE_TIMEOUT_MS "DestCidUpdateIdleTimeoutMs"
 
 #define QUIC_SETTING_INITIAL_RTT                    "InitialRttMs"
 #define QUIC_SETTING_MAX_ACK_DELAY                  "MaxAckDelayMs"

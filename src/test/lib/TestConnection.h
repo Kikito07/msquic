@@ -92,6 +92,9 @@ class TestConnection
     uint32_t DatagramsLost;
     uint32_t DatagramsAcknowledged;
 
+    const uint8_t* NegotiatedAlpn;
+    uint8_t NegotiatedAlpnLength;
+
     QUIC_STATUS
     HandleConnectionEvent(
         _Inout_ QUIC_CONNECTION_EVENT* Event
@@ -254,6 +257,9 @@ public:
     uint32_t GetDisconnectTimeout();                    // milliseconds
     QUIC_STATUS SetDisconnectTimeout(uint32_t value);   // milliseconds
 
+    uint32_t GetDestCidUpdateIdleTimeoutMs();                   // milliseconds
+    QUIC_STATUS SetDestCidUpdateIdleTimeoutMs(uint32_t value);  // milliseconds
+
     uint16_t GetPeerBidiStreamCount();
     QUIC_STATUS SetPeerBidiStreamCount(uint16_t value);
 
@@ -287,4 +293,9 @@ public:
     QUIC_STATUS SetResumptionTicket(const QUIC_BUFFER* ResumptionTicket) const;
 
     QUIC_STATUS SetCustomValidationResult(bool AcceptCert);
+
+    uint32_t GetDestCidUpdateCount();
+
+    const uint8_t* GetNegotiatedAlpn() const;
+    uint8_t GetNegotiatedAlpnLength() const;
 };

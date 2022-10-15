@@ -117,9 +117,6 @@ param (
     [switch]$PGO = $false,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SharedEC = $false,
-
-    [Parameter(Mandatory = $false)]
     [switch]$XDP = $false,
 
     [Parameter(Mandatory = $false)]
@@ -153,9 +150,6 @@ if ($Kernel) {
     }
     if ($PGO) {
         Write-Error "'-PGO' is not supported in kernel mode!"
-    }
-    if ($SharedEC) {
-        Write-Error "'-SharedEC' is not supported in kernel mode!"
     }
     if ($XDP) {
         Write-Error "'-XDP' is not supported in kernel mode!"
@@ -252,7 +246,6 @@ Set-ScriptVariables -Local $Local `
                     -LocalArch $LocalArch `
                     -RemoteTls $RemoteTls `
                     -RemoteArch $RemoteArch `
-                    -SharedEC $SharedEC `
                     -XDP $XDP `
                     -Config $Config `
                     -Publish $Publish `
@@ -261,7 +254,8 @@ Set-ScriptVariables -Local $Local `
                     -RemoteAddress $RemoteAddress `
                     -Session $Session `
                     -Kernel $Kernel `
-                    -FailOnRegression $FailOnRegression
+                    -FailOnRegression $FailOnRegression `
+                    -PGO $PGO
 
 $RemotePlatform = Invoke-TestCommand -Session $Session -ScriptBlock {
     if ($IsWindows) {
@@ -271,7 +265,7 @@ $RemotePlatform = Invoke-TestCommand -Session $Session -ScriptBlock {
     }
 }
 
-$OutputDir = Join-Path $RootDir "artifacts/PerfDataResults/$RemotePlatform/$($RemoteArch)_$($Config)_$($RemoteTls)"
+$OutputDir = Join-Path $RootDir "artifacts/PerfDataResults/$RemotePlatform/$($RemoteArch)_$($Config)_$($RemoteTls)$($ExtraArtifactDir)"
 New-Item -Path $OutputDir -ItemType Directory -Force | Out-Null
 
 $DebugFileName = $Local ? "DebugLogLocal.txt" : "DebugLog.txt"
@@ -425,9 +419,17 @@ function Invoke-Test {
         $RemoteArguments += " -stats:1"
     }
 
+    if ($LocalArguments.Contains("-exec:maxtput")) {
+        $RemoteArguments += " -exec:maxtput"
+    }
+
+    if ($LocalArguments.Contains("-exec:lowlat")) {
+        $RemoteArguments += " -exec:lowlat"
+    }
+
     if ($XDP) {
-        $RemoteArguments += " -cpu:-1"
-        $LocalArguments += " -cpu:-1"
+        $RemoteArguments += " -pollidle:10000"
+        $LocalArguments += " -pollidle:10000"
     }
 
     if ($Kernel) {
@@ -476,7 +478,7 @@ function Invoke-Test {
     try {
         1..$NumIterations | ForEach-Object {
             Write-LogAndDebug "Running Local: $LocalExe Args: $LocalArguments"
-            $LocalResults = Invoke-LocalExe -Exe $LocalExe -RunArgs $LocalArguments -Timeout $Timeout -OutputDir $OutputDir
+            $LocalResults = Invoke-LocalExe -Exe $LocalExe -RunArgs $LocalArguments -Timeout $Timeout -OutputDir $OutputDir -HistogramFileName "$($Test)_run$($_).txt"
             Write-LogAndDebug $LocalResults
             $AllLocalParsedResults = Get-TestResult -Results $LocalResults -Matcher $Test.ResultsMatcher -FailureDefault $Test.FailureDefault
             $AllRunsResults += $AllLocalParsedResults
@@ -569,7 +571,8 @@ try {
     Remove-PerfServices
 
     if ($IsWindows) {
-        Cancel-RemoteLogs -RemoteDirectory $RemoteDirectory
+        # Best effort, try to cancel any outstanding logs
+        try { Cancel-RemoteLogs -RemoteDirectory $RemoteDirectory } catch { }
 
         try {
             $CopyToDirectory = "C:\RunningTests"

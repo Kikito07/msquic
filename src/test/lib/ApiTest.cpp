@@ -1248,7 +1248,7 @@ QuicTestConnectionCloseFromCallback() {
         TEST_QUIC_SUCCEEDED(Stream->Send(&Context.BufferToSend, 1, QUIC_SEND_FLAG_FIN));
 
         TEST_QUIC_SUCCEEDED(Connection.Start(ClientConfiguration, ServerLocalAddr.GetFamily(), QUIC_TEST_LOOPBACK_FOR_AF(ServerLocalAddr.GetFamily()), ServerLocalAddr.GetPort()));
-    
+
         CxPlatSleep(50);
     }
 }
@@ -1867,11 +1867,7 @@ void QuicTestCloseConnBeforeStreamFlush()
         static QUIC_STATUS ClientCallback(_In_ MsQuicConnection* Conn, _In_opt_ void*, _Inout_ QUIC_CONNECTION_EVENT* Event) {
             if (Event->Type == QUIC_CONNECTION_EVENT_CONNECTED) {
                 auto Stream = new(std::nothrow) MsQuicStream(*Conn, QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL, CleanUpAutoDelete);
-                if (QUIC_FAILED(Stream->GetInitStatus()) ||
-                    QUIC_FAILED(Stream->Send(&NoopBuffer, 1, QUIC_SEND_FLAG_START | QUIC_SEND_FLAG_FIN))) {
-                    TEST_FAILURE("Stream creation or send failed.");
-                    delete Stream;
-                }
+                (void)Stream->Send(&NoopBuffer, 1, QUIC_SEND_FLAG_START | QUIC_SEND_FLAG_FIN);
                 Conn->Close();
             }
             return QUIC_STATUS_SUCCESS;
@@ -2103,7 +2099,7 @@ void QuicTestStatefulGlobalSetParam()
                 QUIC_ADDRESS_FAMILY_INET,
                 "localhost",
                 4433));
-        CxPlatSleep(100); // bit slow to set MsQuicLib.InUse = TRUE
+        TEST_TRUE(WaitForMsQuicInUse()); // Waiting for to set MsQuicLib.InUse = TRUE
 
         uint16_t Mode = QUIC_LOAD_BALANCING_SERVER_ID_IP;
         TEST_QUIC_STATUS(
@@ -2115,21 +2111,23 @@ void QuicTestStatefulGlobalSetParam()
                 &Mode));
     }
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
     //
-    // Set QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS when MsQuicLib.Datapath != NULL
+    // Set QUIC_PARAM_GLOBAL_EXECUTION_CONFIG when MsQuicLib.Datapath != NULL
     //
     {
-        TestScopeLogger LogScope1("Set QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS when MsQuicLib.Datapath != NULL");
-        GlobalSettingScope ParamScope(QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS);
-        uint16_t Data[4] = {};
+        TestScopeLogger LogScope1("Set QUIC_PARAM_GLOBAL_EXECUTION_CONFIG when MsQuicLib.Datapath != NULL");
+        GlobalSettingScope ParamScope(QUIC_PARAM_GLOBAL_EXECUTION_CONFIG);
+        uint16_t Data[QUIC_EXECUTION_CONFIG_MIN_SIZE] = {};
         TEST_QUIC_STATUS(
             QUIC_STATUS_INVALID_STATE,
             MsQuic->SetParam(
                 nullptr,
-                QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS,
+                QUIC_PARAM_GLOBAL_EXECUTION_CONFIG,
                 sizeof(Data),
                 &Data));
     }
+#endif
 }
 
 void QuicTestGlobalParam()
@@ -2299,7 +2297,6 @@ void QuicTestGlobalParam()
                     &Length,
                     &ActualVersion));
             TEST_EQUAL(ActualVersion[0], 2);
-            TEST_EQUAL(ActualVersion[1], 1);
             // value of idx 2 and 3 are decided at build time.
             // it is hard to verify the values at runtime.
         }
@@ -2318,13 +2315,15 @@ void QuicTestGlobalParam()
             //
             {
                 TestScopeLogger LogScope2("QuicSettingsSettingsToInternal fail");
+                uint32_t MinimumSettingsSize =
+                    FIELD_OFFSET(QUIC_SETTINGS, MtuDiscoveryMissingProbeCount) + sizeof(((QUIC_SETTINGS*)0)->MtuDiscoveryMissingProbeCount);
                 QUIC_SETTINGS Settings{0};
                 TEST_QUIC_STATUS(
                     QUIC_STATUS_INVALID_PARAMETER,
                     MsQuic->SetParam(
                         nullptr,
                         QUIC_PARAM_GLOBAL_SETTINGS,
-                        sizeof(QUIC_SETTINGS)-8,
+                        MinimumSettingsSize-8,
                         &Settings));
             }
 
@@ -2445,43 +2444,14 @@ void QuicTestGlobalParam()
         }
     }
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
     //
-    // QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS
+    // QUIC_PARAM_GLOBAL_EXECUTION_CONFIG
     //
     {
-        TestScopeLogger LogScope0("QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS");
+        TestScopeLogger LogScope0("QUIC_PARAM_GLOBAL_EXECUTION_CONFIG");
         {
-            GlobalSettingScope ParamScope1(QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS);
-            //
-            // BufferLength is not divisible by sizeof(uint16_t)
-            //
-            {
-                TestScopeLogger LogScope2("BufferLength is not divisible by sizeof(uint16_t)");
-                uint16_t Data[4];
-                TEST_QUIC_STATUS(
-                    QUIC_STATUS_INVALID_PARAMETER,
-                    MsQuic->SetParam(
-                        nullptr,
-                        QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS,
-                        sizeof(Data) + 1,
-                        &Data));
-            }
-
-            //
-            // one of data is bigger than the number of its platform cpus
-            //
-            {
-                TestScopeLogger LogScope2("one of data is bigger than the number of its platform cpus");
-                uint16_t Data[4] = {};
-                Data[0] = UINT16_MAX;
-                TEST_QUIC_STATUS(
-                    QUIC_STATUS_INVALID_PARAMETER,
-                    MsQuic->SetParam(
-                        nullptr,
-                        QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS,
-                        sizeof(Data),
-                        &Data));
-            }
+            GlobalSettingScope ParamScope1(QUIC_PARAM_GLOBAL_EXECUTION_CONFIG);
 
             //
             // Good without data
@@ -2491,12 +2461,23 @@ void QuicTestGlobalParam()
                 TEST_QUIC_SUCCEEDED(
                     MsQuic->SetParam(
                         nullptr,
-                        QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS,
+                        QUIC_PARAM_GLOBAL_EXECUTION_CONFIG,
                         0,
                         nullptr));
             }
 
-            uint16_t Data[4] = {};
+            uint8_t Data[QUIC_EXECUTION_CONFIG_MIN_SIZE + sizeof(uint16_t) * 4] = {};
+            uint32_t DataLength = sizeof(Data);
+            QUIC_EXECUTION_CONFIG* Config = (QUIC_EXECUTION_CONFIG*)Data;
+            Config->ProcessorCount = 4;
+            if (CxPlatProcMaxCount() < Config->ProcessorCount) {
+                Config->ProcessorCount = CxPlatProcMaxCount();
+                DataLength = QUIC_EXECUTION_CONFIG_MIN_SIZE + sizeof(uint16_t) * Config->ProcessorCount;
+            }
+            for (uint16_t i = 0; i < (uint16_t)Config->ProcessorCount; ++i) {
+                Config->ProcessorList[i] = i;
+            }
+
             //
             // Good with data
             //
@@ -2505,15 +2486,15 @@ void QuicTestGlobalParam()
                 TEST_QUIC_SUCCEEDED(
                     MsQuic->SetParam(
                         nullptr,
-                        QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS,
-                        sizeof(Data),
+                        QUIC_PARAM_GLOBAL_EXECUTION_CONFIG,
+                        DataLength,
                         &Data));
             }
 
             //
             // Good GetParam with data
             //
-            SimpleGetParamTest(nullptr, QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS, sizeof(uint16_t) * 4, Data);
+            SimpleGetParamTest(nullptr, QUIC_PARAM_GLOBAL_EXECUTION_CONFIG, DataLength, Data);
         }
 
         //
@@ -2523,10 +2504,11 @@ void QuicTestGlobalParam()
         TEST_QUIC_SUCCEEDED(
             MsQuic->GetParam(
                 nullptr,
-                QUIC_PARAM_GLOBAL_DATAPATH_PROCESSORS,
+                QUIC_PARAM_GLOBAL_EXECUTION_CONFIG,
                 &BufferLength,
                 nullptr));
     }
+#endif
 
 #if QUIC_TEST_DATAPATH_HOOKS_ENABLED
     //
@@ -4787,6 +4769,7 @@ QuicTestGetPerfCounters()
     TEST_EQUAL(BufferLength, (sizeof(uint64_t) * (QUIC_PERF_COUNTER_MAX - 4)));
 }
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 void
 ValidateVersionSettings(
     _In_ const QUIC_VERSION_SETTINGS* const OutputVersionSettings,
@@ -5038,6 +5021,7 @@ QuicTestVersionSettings()
         ValidateVersionSettings(OutputVersionSettings, ValidVersions, ARRAYSIZE(ValidVersions));
     }
 }
+#endif // QUIC_API_ENABLE_PREVIEW_FEATURES
 
 void
 QuicTestValidateParamApi()
@@ -5322,6 +5306,7 @@ QuicTestStorage()
     TEST_NOT_EQUAL(Settings.InitialRttMs, SpecialInitialRtt);
 }
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 void
 QuicTestVersionStorage()
 {
@@ -5680,3 +5665,4 @@ QuicTestVersionStorage()
     TEST_EQUAL(Settings.OfferedVersions, nullptr);
     TEST_EQUAL(Settings.FullyDeployedVersions, nullptr);
 }
+#endif // QUIC_API_ENABLE_PREVIEW_FEATURES

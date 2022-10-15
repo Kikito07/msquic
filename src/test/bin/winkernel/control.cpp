@@ -472,6 +472,12 @@ size_t QUIC_IOCTL_BUFFER_SIZES[] =
     0,
     0,
     0,
+    0,
+    0,
+    sizeof(QUIC_RUN_VN_TP_ODD_SIZE_PARAMS),
+    sizeof(UINT8),
+    sizeof(UINT8),
+    sizeof(UINT8),
 };
 
 CXPLAT_STATIC_ASSERT(
@@ -504,6 +510,8 @@ typedef union {
     QUIC_RUN_REBIND_PARAMS RebindParams;
     UINT8 RejectByClosing;
     QUIC_RUN_CIBIR_EXTENSION CibirParams;
+    QUIC_RUN_VN_TP_ODD_SIZE_PARAMS OddSizeVnTpParams;
+    UINT8 TestServerVNTP;
 
 } QUIC_IOCTL_PARAMS;
 
@@ -694,6 +702,7 @@ QuicTestCtlEvtIoDeviceControl(
                 Params->Params1.ServerStatelessRetry != 0,
                 Params->Params1.ClientUsesOldVersion != 0,
                 Params->Params1.MultipleALPNs != 0,
+                Params->Params1.GreaseQuicBitExtension != 0,
                 (QUIC_TEST_ASYNC_CONFIG_MODE)Params->Params1.AsyncConfiguration,
                 Params->Params1.MultiPacketClientInitial != 0,
                 (QUIC_TEST_RESUMPTION_MODE)Params->Params1.SessionResumption,
@@ -761,10 +770,12 @@ QuicTestCtlEvtIoDeviceControl(
         QuicTestCtlRun(QuicTestValidateStreamEvents(Params->Test));
         break;
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
     case IOCTL_QUIC_RUN_VERSION_NEGOTIATION:
         CXPLAT_FRE_ASSERT(Params != nullptr);
         QuicTestCtlRun(QuicTestVersionNegotiation(Params->Family));
         break;
+#endif
 
     case IOCTL_QUIC_RUN_KEY_UPDATE:
         CXPLAT_FRE_ASSERT(Params != nullptr);
@@ -913,6 +924,7 @@ QuicTestCtlEvtIoDeviceControl(
                 Params->CustomCertValidationParams.AsyncValidation));
         break;
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
     case IOCTL_QUIC_RUN_VERSION_NEGOTIATION_RETRY:
         CXPLAT_FRE_ASSERT(Params != nullptr);
         QuicTestCtlRun(QuicTestVersionNegotiationRetry(Params->Family));
@@ -963,6 +975,7 @@ QuicTestCtlEvtIoDeviceControl(
     case IOCTL_QUIC_RUN_VALIDATE_VERSION_SETTINGS_SETTINGS:
         QuicTestCtlRun(QuicTestVersionSettings());
         break;
+#endif // QUIC_API_ENABLE_PREVIEW_FEATURES
 
     case IOCTL_QUIC_RUN_CONNECT_CLIENT_CERT:
         CXPLAT_FRE_ASSERT(Params != nullptr);
@@ -1188,6 +1201,7 @@ QuicTestCtlEvtIoDeviceControl(
                 &Params->CredValidationParams.CredConfig));
         break;
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
     case IOCTL_QUIC_RUN_CIBIR_EXTENSION:
         CXPLAT_FRE_ASSERT(Params != nullptr);
         QuicTestCtlRun(
@@ -1195,6 +1209,7 @@ QuicTestCtlEvtIoDeviceControl(
                 Params->CibirParams.Family,
                 Params->CibirParams.Mode));
         break;
+#endif
 
     case IOCTL_QUIC_RUN_STREAM_PRIORITY_INFINITE_LOOP:
         QuicTestCtlRun(QuicTestStreamPriorityInfiniteLoop());
@@ -1255,9 +1270,47 @@ QuicTestCtlEvtIoDeviceControl(
         QuicTestCtlRun(QuicTestCloseConnBeforeStreamFlush());
         break;
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
     case IOCTL_QUIC_RUN_VERSION_STORAGE:
         QuicTestCtlRun(QuicTestVersionStorage());
         break;
+#endif
+
+    case IOCTL_QUIC_RUN_CONNECT_AND_IDLE_FOR_DEST_CID_CHANGE:
+        QuicTestCtlRun(QuicTestConnectAndIdleForDestCidChange());
+        break;
+
+    case IOCTL_QUIC_RUN_CHANGE_ALPN:
+        QuicTestCtlRun(QuicTestChangeAlpn());
+        break;
+
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
+    case IOCTL_QUIC_RUN_VN_TP_ODD_SIZE:
+        CXPLAT_FRE_ASSERT(Params != nullptr);
+        QuicTestCtlRun(
+            QuicTestVNTPOddSize(
+                Params->OddSizeVnTpParams.TestServer,
+                Params->OddSizeVnTpParams.VnTpSize));
+        break;
+
+    case IOCTL_QUIC_RUN_VN_TP_CHOSEN_VERSION_MISMATCH:
+        CXPLAT_FRE_ASSERT(Params != nullptr);
+        QuicTestCtlRun(
+            QuicTestVNTPChosenVersionMismatch(Params->TestServerVNTP != 0));
+        break;
+
+    case IOCTL_QUIC_RUN_VN_TP_CHOSEN_VERSION_ZERO:
+        CXPLAT_FRE_ASSERT(Params != nullptr);
+        QuicTestCtlRun(
+            QuicTestVNTPChosenVersionZero(Params->TestServerVNTP != 0));
+        break;
+
+    case IOCTL_QUIC_RUN_VN_TP_OTHER_VERSION_ZERO:
+        CXPLAT_FRE_ASSERT(Params != nullptr);
+        QuicTestCtlRun(
+            QuicTestVNTPOtherVersionZero(Params->TestServerVNTP != 0));
+        break;
+#endif
 
     default:
         Status = STATUS_NOT_IMPLEMENTED;

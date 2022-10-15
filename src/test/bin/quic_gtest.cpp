@@ -360,6 +360,7 @@ TEST_P(WithValidateStreamEventArgs, ValidateStreamEvents) {
     }
 }
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 TEST(ParameterValidation, ValidateVersionSettings) {
     TestLogger Logger("QuicTestVersionSettings");
     if (TestingKernelMode) {
@@ -368,6 +369,7 @@ TEST(ParameterValidation, ValidateVersionSettings) {
         QuicTestVersionSettings();
     }
 }
+#endif
 
 TEST(ParameterValidation, ValidateParamApi) {
     TestLogger Logger("QuicTestValidateParamApi");
@@ -565,6 +567,15 @@ TEST(Alpn, InvalidAlpnLengths) {
     }
 }
 
+TEST(Alpn, ChangeAlpn) {
+    TestLogger Logger("QuicTestChangeAlpn");
+    if (TestingKernelMode) {
+        ASSERT_TRUE(DriverClient.Run(IOCTL_QUIC_RUN_CHANGE_ALPN));
+    } else {
+        QuicTestChangeAlpn();
+    }
+}
+
 
 TEST_P(WithFamilyArgs, BindConnectionImplicit) {
     TestLoggerT<ParamType> Logger("QuicTestBindConnectionImplicit", GetParam());
@@ -592,6 +603,7 @@ TEST_P(WithHandshakeArgs1, Connect) {
             (uint8_t)GetParam().ServerStatelessRetry,
             0,  // ClientUsesOldVersion
             (uint8_t)GetParam().MultipleALPNs,
+            (uint8_t)GetParam().GreaseQuicBitExtension,
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             (uint8_t)GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_DISABLED,
@@ -604,6 +616,7 @@ TEST_P(WithHandshakeArgs1, Connect) {
             GetParam().ServerStatelessRetry,
             false,  // ClientUsesOldVersion
             GetParam().MultipleALPNs,
+            GetParam().GreaseQuicBitExtension,
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_DISABLED,
@@ -620,6 +633,7 @@ TEST_P(WithHandshakeArgs1, Resume) {
             (uint8_t)GetParam().ServerStatelessRetry,
             0,  // ClientUsesOldVersion
             (uint8_t)GetParam().MultipleALPNs,
+            (uint8_t)GetParam().GreaseQuicBitExtension,
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             (uint8_t)GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_ENABLED,
@@ -632,6 +646,7 @@ TEST_P(WithHandshakeArgs1, Resume) {
             GetParam().ServerStatelessRetry,
             false,  // ClientUsesOldVersion
             GetParam().MultipleALPNs,
+            GetParam().GreaseQuicBitExtension,
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_ENABLED,
@@ -647,6 +662,7 @@ TEST_P(WithHandshakeArgs1, ResumeRejection) {
             (uint8_t)GetParam().ServerStatelessRetry,
             0,  // ClientUsesOldVersion
             (uint8_t)GetParam().MultipleALPNs,
+            (uint8_t)GetParam().GreaseQuicBitExtension,
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             (uint8_t)GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_REJECTED,
@@ -659,6 +675,7 @@ TEST_P(WithHandshakeArgs1, ResumeRejection) {
             GetParam().ServerStatelessRetry,
             false,  // ClientUsesOldVersion
             GetParam().MultipleALPNs,
+            GetParam().GreaseQuicBitExtension,
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_REJECTED,
@@ -687,6 +704,7 @@ TEST_P(WithFamilyArgs, InterfaceBinding) {
     }
 }
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 TEST_P(WithHandshakeArgs2, OldVersion) {
     TestLoggerT<ParamType> Logger("QuicTestConnect-OldVersion", GetParam());
     if (TestingKernelMode) {
@@ -695,6 +713,7 @@ TEST_P(WithHandshakeArgs2, OldVersion) {
             (uint8_t)GetParam().ServerStatelessRetry,
             1,  // ClientUsesOldVersion
             0,  // MultipleALPNs
+            0,  // GreaseQuicBitExtension
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             0,  // MultiPacketClientInitial
             QUIC_TEST_RESUMPTION_DISABLED,  // SessionResumption
@@ -706,13 +725,15 @@ TEST_P(WithHandshakeArgs2, OldVersion) {
             GetParam().Family,
             GetParam().ServerStatelessRetry,
             true,  // ClientUsesOldVersion
-            false,  // MultipleALPNs
+            false, // MultipleALPNs
+            false, // GreaseQuicBitExtension
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             false,  // MultiPacketClientInitial
             QUIC_TEST_RESUMPTION_DISABLED,  // SessionResumption
             0);     // RandomLossPercentage
     }
 }
+#endif
 
 TEST_P(WithHandshakeArgs3, AsyncSecurityConfig) {
     TestLoggerT<ParamType> Logger("QuicTestConnect-AsyncSecurityConfig", GetParam());
@@ -722,6 +743,7 @@ TEST_P(WithHandshakeArgs3, AsyncSecurityConfig) {
             (uint8_t)GetParam().ServerStatelessRetry,
             0,  // ClientUsesOldVersion
             (uint8_t)GetParam().MultipleALPNs,
+            0,  // GreaseQuicBitExtension
             GetParam().DelayedAsyncConfig ? (uint8_t)QUIC_TEST_ASYNC_CONFIG_DELAYED : (uint8_t)QUIC_TEST_ASYNC_CONFIG_ENABLED,
             0,  // MultiPacketClientInitial
             QUIC_TEST_RESUMPTION_DISABLED,  // SessionResumption
@@ -734,6 +756,7 @@ TEST_P(WithHandshakeArgs3, AsyncSecurityConfig) {
             GetParam().ServerStatelessRetry,
             false,  // ClientUsesOldVersion
             GetParam().MultipleALPNs,
+            false,  // GreaseQuicBitExtension
             GetParam().DelayedAsyncConfig ? QUIC_TEST_ASYNC_CONFIG_DELAYED : QUIC_TEST_ASYNC_CONFIG_ENABLED,
             false,  // MultiPacketClientInitial
             QUIC_TEST_RESUMPTION_DISABLED,  // SessionResumption
@@ -741,6 +764,7 @@ TEST_P(WithHandshakeArgs3, AsyncSecurityConfig) {
     }
 }
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 TEST_P(WithFamilyArgs, VersionNegotiation) {
     TestLoggerT<ParamType> Logger("QuicTestVersionNegotiation", GetParam());
     if (TestingKernelMode) {
@@ -836,6 +860,7 @@ TEST_P(WithFamilyArgs, FailedVersionNegotiation) {
         QuicTestFailedVersionNegotiation(GetParam().Family);
     }
 }
+#endif // QUIC_API_ENABLE_PREVIEW_FEATURES
 
 TEST_P(WithHandshakeArgs5, CustomCertificateValidation) {
     TestLoggerT<ParamType> Logger("QuicTestCustomCertificateValidation", GetParam());
@@ -863,6 +888,7 @@ TEST_P(WithHandshakeArgs6, ConnectClientCertificate) {
     }
 }
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 TEST_P(WithHandshakeArgs7, CibirExtension) {
     TestLoggerT<ParamType> Logger("QuicTestCibirExtension", GetParam());
     if (TestingKernelMode) {
@@ -875,6 +901,7 @@ TEST_P(WithHandshakeArgs7, CibirExtension) {
         QuicTestCibirExtension(GetParam().Family, GetParam().Mode);
     }
 }
+#endif
 
 // TEST(Handshake, ResumptionAcrossVersions) {
 //     if (TestingKernelMode) {
@@ -883,6 +910,59 @@ TEST_P(WithHandshakeArgs7, CibirExtension) {
 //         QuicTestResumptionAcrossVersions();
 //     }
 // }
+
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
+#if QUIC_TEST_DISABLE_VNE_TP_GENERATION
+TEST_P(WithHandshakeArgs8, OddSizeVnTp) {
+    TestLoggerT<ParamType> Logger("QuicTestVNTPOddSize", GetParam());
+    if (TestingKernelMode) {
+        QUIC_RUN_VN_TP_ODD_SIZE_PARAMS Params = {
+            GetParam().TestServer,
+            GetParam().VnTpSize
+        };
+        ASSERT_TRUE(DriverClient.Run(IOCTL_QUIC_RUN_VN_TP_ODD_SIZE, Params));
+    } else {
+        QuicTestVNTPOddSize(GetParam().TestServer, GetParam().VnTpSize);
+    }
+}
+
+TEST_P(WithHandshakeArgs9, VnTpChosenVersionMismatch) {
+    TestLoggerT<ParamType> Logger("QuicTestVNTPChosenVersionMismatch", GetParam());
+    if (TestingKernelMode) {
+        ASSERT_TRUE(
+            DriverClient.Run(
+                IOCTL_QUIC_RUN_VN_TP_CHOSEN_VERSION_MISMATCH,
+                (uint8_t)GetParam()));
+    } else {
+        QuicTestVNTPChosenVersionMismatch(GetParam());
+    }
+}
+
+TEST_P(WithHandshakeArgs9, VnTpChosenVersionZero) {
+    TestLoggerT<ParamType> Logger("QuicTestVNTPChosenVersionZero", GetParam());
+    if (TestingKernelMode) {
+        ASSERT_TRUE(
+            DriverClient.Run(
+                IOCTL_QUIC_RUN_VN_TP_CHOSEN_VERSION_ZERO,
+                (uint8_t)GetParam()));
+    } else {
+        QuicTestVNTPChosenVersionZero(GetParam());
+    }
+}
+
+TEST_P(WithHandshakeArgs9, VnTpOtherVersionZero) {
+    TestLoggerT<ParamType> Logger("QuicTestVNTPOtherVersionZero", GetParam());
+    if (TestingKernelMode) {
+        ASSERT_TRUE(
+            DriverClient.Run(
+                IOCTL_QUIC_RUN_VN_TP_OTHER_VERSION_ZERO,
+                (uint8_t)GetParam()));
+    } else {
+        QuicTestVNTPOtherVersionZero(GetParam());
+    }
+}
+#endif
+#endif
 
 #if QUIC_TEST_FAILING_TEST_CERTIFICATES
 TEST(CredValidation, ConnectExpiredServerCertificate) {
@@ -1082,6 +1162,7 @@ TEST_P(WithHandshakeArgs4, RandomLoss) {
             (uint8_t)GetParam().ServerStatelessRetry,
             0,  // ClientUsesOldVersion
             0,  // MultipleALPNs
+            0,  // GreaseQuicBitExtension
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             (uint8_t)GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_DISABLED,
@@ -1094,6 +1175,7 @@ TEST_P(WithHandshakeArgs4, RandomLoss) {
             GetParam().ServerStatelessRetry,
             false,  // ClientUsesOldVersion
             false,  // MultipleALPNs,
+            false,  // GreaseQuicBitExtension
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_DISABLED,
@@ -1109,6 +1191,7 @@ TEST_P(WithHandshakeArgs4, RandomLossResume) {
             (uint8_t)GetParam().ServerStatelessRetry,
             0,  // ClientUsesOldVersion
             0,  // MultipleALPNs
+            0,  // GreaseQuicBitExtension
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             (uint8_t)GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_ENABLED,
@@ -1121,6 +1204,7 @@ TEST_P(WithHandshakeArgs4, RandomLossResume) {
             GetParam().ServerStatelessRetry,
             false,  // ClientUsesOldVersion
             false,  // MultipleALPNs,
+            false,  // GreaseQuicBitExtension
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_ENABLED,
@@ -1135,6 +1219,7 @@ TEST_P(WithHandshakeArgs4, RandomLossResumeRejection) {
             (uint8_t)GetParam().ServerStatelessRetry,
             0,  // ClientUsesOldVersion
             0,  // MultipleALPNs
+            0,  // GreaseQuicBitExtension
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             (uint8_t)GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_REJECTED,
@@ -1147,6 +1232,7 @@ TEST_P(WithHandshakeArgs4, RandomLossResumeRejection) {
             GetParam().ServerStatelessRetry,
             false,  // ClientUsesOldVersion
             false,  // MultipleALPNs,
+            false,  // GreaseQuicBitExtension
             QUIC_TEST_ASYNC_CONFIG_DISABLED,
             GetParam().MultiPacketClientInitial,
             QUIC_TEST_RESUMPTION_REJECTED,
@@ -1502,6 +1588,15 @@ TEST_P(WithBool, IdleTimeout) {
     }
 }
 
+TEST(Misc, IdleDestCidChange) {
+    TestLogger Logger("QuicTestConnectAndIdleDestCidChange");
+    if (TestingKernelMode) {
+        ASSERT_TRUE(DriverClient.Run(IOCTL_QUIC_RUN_CONNECT_AND_IDLE_FOR_DEST_CID_CHANGE));
+    } else {
+        QuicTestConnectAndIdleForDestCidChange();
+    }
+}
+
 TEST(Misc, ServerDisconnect) {
     TestLogger Logger("QuicTestServerDisconnect");
     if (TestingKernelMode) {
@@ -1808,6 +1903,8 @@ TEST(Basic, TestStorage) {
         QuicTestStorage();
     }
 }
+
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 TEST(Basic, TestVersionStorage) {
     if (!CanRunStorageTests) {
         return;
@@ -1820,6 +1917,7 @@ TEST(Basic, TestVersionStorage) {
         QuicTestVersionStorage();
     }
 }
+#endif
 
 #endif // _WIN32
 
@@ -1862,20 +1960,24 @@ INSTANTIATE_TEST_SUITE_P(
 
 #endif // QUIC_TEST_DATAPATH_HOOKS_ENABLED
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 INSTANTIATE_TEST_SUITE_P(
     Basic,
     WithVersionNegotiationExtArgs,
     testing::ValuesIn(VersionNegotiationExtArgs::Generate()));
+#endif
 
 INSTANTIATE_TEST_SUITE_P(
     Handshake,
     WithHandshakeArgs1,
     testing::ValuesIn(HandshakeArgs1::Generate()));
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 INSTANTIATE_TEST_SUITE_P(
     Handshake,
     WithHandshakeArgs2,
     testing::ValuesIn(HandshakeArgs2::Generate()));
+#endif
 
 INSTANTIATE_TEST_SUITE_P(
     Handshake,
@@ -1901,10 +2003,26 @@ INSTANTIATE_TEST_SUITE_P(
     WithHandshakeArgs6,
     testing::ValuesIn(HandshakeArgs6::Generate()));
 
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
 INSTANTIATE_TEST_SUITE_P(
     Handshake,
     WithHandshakeArgs7,
     testing::ValuesIn(HandshakeArgs7::Generate()));
+#endif
+
+#ifdef QUIC_API_ENABLE_PREVIEW_FEATURES
+#if QUIC_TEST_DISABLE_VNE_TP_GENERATION
+INSTANTIATE_TEST_SUITE_P(
+    Handshake,
+    WithHandshakeArgs8,
+    testing::ValuesIn(HandshakeArgs8::Generate()));
+
+INSTANTIATE_TEST_SUITE_P(
+    Handshake,
+    WithHandshakeArgs9,
+    ::testing::Values(false, true));
+#endif
+#endif
 
 INSTANTIATE_TEST_SUITE_P(
     AppData,

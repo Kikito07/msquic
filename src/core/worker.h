@@ -22,6 +22,11 @@ typedef struct QUIC_CACHEALIGN QUIC_WORKER {
     CXPLAT_EVENT Done;
 
     //
+    // Indicates if this work is handled by an external (to QUIC) execution context.
+    //
+    BOOLEAN IsExternal;
+
+    //
     // TRUE if the worker is currently running.
     //
     BOOLEAN Enabled;
@@ -41,19 +46,11 @@ typedef struct QUIC_CACHEALIGN QUIC_WORKER {
     //
     uint32_t AverageQueueDelay;
 
-#ifdef QUIC_WORKER_POLLING
-    //
-    // The number of poll loops that have been executed.
-    //
-    uint32_t PollCount;
-#endif // QUIC_WORKER_POLLING
-
     //
     // Timers for the worker's connections.
     //
     QUIC_TIMER_WHEEL TimerWheel;
 
-#ifndef QUIC_USE_EXECUTION_CONTEXTS
     //
     // An event to kick the thread.
     //
@@ -63,7 +60,6 @@ typedef struct QUIC_CACHEALIGN QUIC_WORKER {
     // A thread for draining operations from queued connections.
     //
     CXPLAT_THREAD Thread;
-#endif // QUIC_USE_EXECUTION_CONTEXTS
 
     //
     // Serializes access to the connection and operation lists.
@@ -135,9 +131,8 @@ QuicWorkerIsOverloaded(
 _IRQL_requires_max_(PASSIVE_LEVEL)
 QUIC_STATUS
 QuicWorkerPoolInitialize(
-    _In_opt_ const void* Owner,
-    _In_ uint16_t ThreadFlags,
-    _In_ uint16_t WorkerCount,
+    _In_ const QUIC_REGISTRATION* Registration,
+    _In_ QUIC_EXECUTION_PROFILE ExecProfile,
     _Out_ QUIC_WORKER_POOL** WorkerPool
     );
 
